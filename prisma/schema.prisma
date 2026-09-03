@@ -1,0 +1,105 @@
+datasource db {
+  provider = "sqlite"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Letter {
+  id                 String   @id @default(cuid())
+  letterId           String?
+  actionType         String   @default("ویرایش")
+  subject            String?
+  orgUnit            String?
+  sender             String?
+  receiver           String?
+  dateStr            String?
+  monthName          String?
+  creatorName        String?
+  creatorRole        String?
+  creatorRaw         String?
+  urgency            String?
+  status             String?
+  registrationNumber String?
+  rawJson            String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([orgUnit])
+  @@index([actionType])
+  @@index([dateStr])
+}
+
+model EraProcess {
+  id            String   @id @default(cuid())
+  processName   String
+  orgUnit       String
+  executionDate String
+  operationType String   @default("اصلاح")
+  entityType    String?  @default("فرآیند")
+  description   String
+  rawJson       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  images        ProcessImage[]
+
+  @@index([orgUnit])
+  @@index([operationType])
+  @@index([entityType])
+}
+
+model ProcessImage {
+  id          String      @id @default(cuid())
+  processId   String
+  processName String?
+  imageData   String      // Base64 image data stored directly in SQLite
+  mimeType    String      @default("image/png")
+  title       String?
+  sortOrder   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  process     EraProcess? @relation(fields: [processId], references: [id], onDelete: Cascade)
+
+  @@index([processId])
+  @@index([processName])
+}
+
+model CauseRule {
+  id          String   @id @default(cuid())
+  keyword     String
+  cause       String   // e.g. "بانکی"
+  targetUnit  String?  // e.g. "حسابداری مالی" or null/"all"
+  matchType   String   @default("contains") // "contains", "exact", "startsWith"
+  isActive    Boolean  @default(true)
+  color       String?  @default("#2563EB")
+  description String?
+  priority    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([cause])
+  @@index([targetUnit])
+}
+
+model ExclusionRule {
+  id         String   @id @default(cuid())
+  keyword    String
+  targetUnit String?  // Specific unit or null for all
+  matchType  String   @default("contains") // "contains", "exact", "startsWith"
+  field      String   @default("subject") // "subject", "creator", "any"
+  isActive   Boolean  @default(true)
+  reason     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([keyword])
+  @@index([targetUnit])
+}
+
+model AppSetting {
+  key       String   @id
+  value     String   // Stored as JSON string
+  updatedAt DateTime @updatedAt
+}
+

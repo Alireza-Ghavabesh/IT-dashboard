@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Vazirmatn', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: #F5F5F0;
+    color: #2D2C28;
+  }
+}
+
+/* Custom smooth natural scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #EBEBE6;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C7C5BB;
+  border-radius: 9999px;
+}
+
+/* Jalali Datepicker Theme & High Z-Index */
+jdp-container {
+  --jdp-primary: #545D4B !important;
+  --jdp-color-0: #FFFFFF !important;
+  --jdp-color-1: #F5F5F0 !important;
+  --jdp-color-2: #E8E6DF !important;
+  --jdp-color-3: #C7C5BB !important;
+  --jdp-color-4: #75746E !important;
+  --jdp-color-5: #2D2C28 !important;
+  font-family: 'Vazirmatn', system-ui, sans-serif !important;
+  z-index: 999999 !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #DDDBCF !important;
+  border-radius: 14px !important;
+}
+
+jdp-overlay {
+  z-index: 999998 !important;
+}
+
+jdp-container .jdp-day.selected, 
+jdp-container .jdp-day-name.selected {
+  background-color: #545D4B !important;
+  color: #FFFFFF !important;
+  font-weight: bold !important;
+  border-radius: 8px !important;
+}
+
+jdp-container .jdp-btn-today, 
+jdp-container .jdp-btn-empty, 
+jdp-container .jdp-btn-close {
+  background: #545D4B !important;
+  border-radius: 8px !important;
+  font-family: inherit !important;
+  font-weight: bold !important;
+}
+
+jdp-container .jdp-icon-plus, 
+jdp-container .jdp-icon-minus {
+  border-radius: 6px !important;
+}
+
