@@ -50,7 +50,6 @@ export const MonthlyMatrixTable: React.FC<MonthlyMatrixTableProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPeriod, setSelectedPeriod] = useState<string>(selectedMonth || 'all');
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'total' | 'unique'>('total');
   const [hideZeroRows, setHideZeroRows] = useState<boolean>(true);
   const [sortField, setSortField] = useState<SortField>('total');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -80,17 +79,9 @@ export const MonthlyMatrixTable: React.FC<MonthlyMatrixTableProps> = ({
         const monthLabel = `${PERSIAN_MONTH_NAMES[mm] || mm} ${y}`;
         const d = stat.months[m];
 
-        const deletes = viewMode === 'total'
-          ? (d?.deleteCount || 0)
-          : (d?.uniqueDeleteCount || 0);
-
-        const edits = viewMode === 'total'
-          ? (d?.editCount || 0)
-          : (d?.uniqueEditCount || 0);
-
-        const total = viewMode === 'total'
-          ? (d?.total || 0)
-          : (d?.uniqueTotal || 0);
+        const deletes = d?.uniqueDeleteCount || 0;
+        const edits = d?.uniqueEditCount || 0;
+        const total = d?.uniqueTotal || 0;
 
         rows.push({
           id: `${stat.unit}-${m}`,
@@ -105,7 +96,7 @@ export const MonthlyMatrixTable: React.FC<MonthlyMatrixTableProps> = ({
     });
 
     return rows;
-  }, [unitStats, allMonths, viewMode]);
+  }, [unitStats, allMonths]);
 
   // Filter rows
   const filteredRows = useMemo(() => {
@@ -221,36 +212,17 @@ export const MonthlyMatrixTable: React.FC<MonthlyMatrixTableProps> = ({
                 جدول تفکیک نامه‌ها بر اساس واحد سازمانی و دوره زمانی
               </h3>
               <p className="text-xs text-[#75746E]">
-                تفکیک ستونی دوره‌های زمانی (ماه) به همراه تعداد دقیق حذف، ویرایش و مجموع ارجاعات هر واحد
+                تفکیک ستونی دوره‌های زمانی (ماه) به همراه تعداد دقیق حذف، ویرایش و مجموع نامه‌های یکتای هر واحد
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* View Mode Switcher: Total vs Deduplicated Unique */}
-          <div className="flex items-center bg-[#EBEBE6] p-1 rounded-xl text-xs font-semibold border border-[#DDDBCF]">
-            <button
-              onClick={() => setViewMode('total')}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                viewMode === 'total'
-                  ? 'bg-white text-[#2D2C28] shadow-xs font-bold'
-                  : 'text-[#75746E] hover:text-[#2D2C28]'
-              }`}
-            >
-              کل ارجاعات
-            </button>
-            <button
-              onClick={() => setViewMode('unique')}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                viewMode === 'unique'
-                  ? 'bg-white text-[#2D2C28] shadow-xs font-bold'
-                  : 'text-[#75746E] hover:text-[#2D2C28]'
-              }`}
-            >
-              نامه‌های یکتا
-            </button>
-          </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#EFEFEA] text-[#2D2C28] border border-[#DDDBCF] text-xs font-bold shadow-2xs">
+            <Layers className="h-3.5 w-3.5 text-[#545D4B]" />
+            نامه‌های یکتا
+          </span>
         </div>
       </div>
 

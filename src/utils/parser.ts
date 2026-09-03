@@ -608,8 +608,12 @@ export function processRawLetters(
   rawList.forEach((item, index) => {
     const rawAny = item as any;
 
+    const rawData = (rawAny && typeof rawAny === 'object' && rawAny.raw && typeof rawAny.raw === 'object')
+      ? rawAny.raw
+      : (rawAny || {});
+
     // Strict extraction of registration number exclusively from "شماره ثبت"
-    const regNoRaw = rawAny["شماره ثبت"];
+    const regNoRaw = rawAny["شماره ثبت"] ?? rawData["شماره ثبت"] ?? rawAny.registrationNumber;
     const registrationNumber = (regNoRaw !== undefined && regNoRaw !== null && String(regNoRaw).trim() !== '')
       ? String(regNoRaw).trim()
       : null;
@@ -624,20 +628,31 @@ export function processRawLetters(
 
     const subject = (
       rawAny["موضوع نامه"] ||
+      rawData["موضوع نامه"] ||
       rawAny["موضوع"] ||
+      rawData["موضوع"] ||
       rawAny["عنوان نامه"] ||
+      rawData["عنوان نامه"] ||
       rawAny["عنوان"] ||
-      rawAny["subject"] ||
-      rawAny["Subject"] ||
+      rawData["عنوان"] ||
+      rawAny.subject ||
+      rawData.subject ||
       'نامه بدون موضوع'
     ).toString().trim();
 
     const originalSubject = (
       rawAny["موضوع"] ||
+      rawData["موضوع"] ||
       rawAny["موضوع نامه"] ||
+      rawData["موضوع نامه"] ||
       rawAny["عنوان نامه"] ||
+      rawData["عنوان نامه"] ||
       rawAny["عنوان"] ||
-      rawAny["subject"] ||
+      rawData["عنوان"] ||
+      rawAny.originalSubject ||
+      rawData.originalSubject ||
+      rawAny.subject ||
+      rawData.subject ||
       ''
     ).toString().trim();
 
@@ -646,38 +661,111 @@ export function processRawLetters(
     
     const creatorStr = (
       rawAny["ایجاد کننده نامه"] ||
+      rawData["ایجاد کننده نامه"] ||
       rawAny["ایجاد کننده"] ||
+      rawData["ایجاد کننده"] ||
       rawAny["ایجادکننده نامه"] ||
+      rawData["ایجادکننده نامه"] ||
       rawAny["ایجادکننده"] ||
+      rawData["ایجادکننده"] ||
       rawAny["ایجاد‌کننده نامه"] ||
+      rawData["ایجاد‌کننده نامه"] ||
       rawAny["ایجاد‌کننده"] ||
+      rawData["ایجاد‌کننده"] ||
       rawAny["کاربر ایجاد کننده"] ||
+      rawData["کاربر ایجاد کننده"] ||
       rawAny["کاربر ایجادکننده"] ||
+      rawData["کاربر ایجادکننده"] ||
       rawAny["ثبت کننده نامه"] ||
+      rawData["ثبت کننده نامه"] ||
       rawAny["ثبت کننده"] ||
+      rawData["ثبت کننده"] ||
       rawAny["ثبت‌کننده"] ||
+      rawData["ثبت‌کننده"] ||
       rawAny["ثبت‌کننده نامه"] ||
+      rawData["ثبت‌کننده نامه"] ||
       rawAny["نام ایجاد کننده"] ||
-      rawAny["creatorRaw"] ||
-      rawAny["creator"] ||
-      rawAny["creatorName"] ||
+      rawData["نام ایجاد کننده"] ||
+      rawAny.creatorRaw ||
+      rawData.creatorRaw ||
+      rawAny.creator ||
+      rawData.creator ||
+      rawAny.creatorName ||
+      rawData.creatorName ||
       ''
     );
-    const senderStr = rawAny["فرستنده"] || rawAny["فرستنده نامه"] || rawAny["ارسال کننده"] || rawAny["sender"] || '';
-    const { unit, name: creatorName, role: creatorRole } = extractOrgUnit(creatorStr, senderStr);
+    const senderStr = (
+      rawAny["فرستنده"] ||
+      rawData["فرستنده"] ||
+      rawAny["فرستنده نامه"] ||
+      rawData["فرستنده نامه"] ||
+      rawAny["ارسال کننده"] ||
+      rawData["ارسال کننده"] ||
+      rawAny.sender ||
+      rawData.sender ||
+      ''
+    );
     
-    const dateInput = rawAny["تاریخ ثبت"] || rawAny["زمان دریافت"] || rawAny["زمان خاتمه"] || rawAny["تاریخ"] || rawAny["date"] || rawAny["Date"] || '';
+    let unit = rawAny.orgUnit || rawData.orgUnit;
+    let creatorName = rawAny.creatorName || rawData.creatorName;
+    let creatorRole = rawAny.creatorRole || rawData.creatorRole;
+    if (!unit) {
+      const extracted = extractOrgUnit(creatorStr, senderStr);
+      unit = extracted.unit;
+      creatorName = extracted.name;
+      creatorRole = extracted.role;
+    }
+    
+    const dateInput = (
+      rawAny["تاریخ ثبت"] ||
+      rawData["تاریخ ثبت"] ||
+      rawAny.dateStr ||
+      rawData.dateStr ||
+      rawData._dateStr ||
+      rawAny["زمان دریافت"] ||
+      rawData["زمان دریافت"] ||
+      rawAny["زمان خاتمه"] ||
+      rawData["زمان خاتمه"] ||
+      rawAny["تاریخ"] ||
+      rawData["تاریخ"] ||
+      rawAny.date ||
+      rawData.date ||
+      ''
+    );
     const dateParsed = parsePersianDate(dateInput ? String(dateInput) : '');
     
     const isReferral = (
       rawAny["ارجاع به دیگری"] === 'بله' ||
       rawAny["ارجاع به دیگری"] === true ||
       rawAny["ارجاع"] === 'بله' ||
+      rawData["ارجاع به دیگری"] === 'بله' ||
+      rawData["ارجاع به دیگری"] === true ||
+      rawData["ارجاع"] === 'بله' ||
+      rawAny.isReferral === true ||
+      rawData.isReferral === true ||
       (subject && subject.includes('ارجاع به دیگری'))
     );
 
-    const description = (rawAny["شرح"] || rawAny["توضیحات نامه"] || rawAny["توضیحات"] || rawAny["description"] || '').toString();
-    const note = (rawAny["یادداشت"] || rawAny["یادداشت نامه"] || rawAny["note"] || '').toString();
+    const description = (
+      rawAny["شرح"] ||
+      rawData["شرح"] ||
+      rawAny["توضیحات نامه"] ||
+      rawData["توضیحات نامه"] ||
+      rawAny["توضیحات"] ||
+      rawData["توضیحات"] ||
+      rawAny.description ||
+      rawData.description ||
+      ''
+    ).toString();
+    const note = (
+      rawAny["یادداشت"] ||
+      rawData["یادداشت"] ||
+      rawAny["یادداشت نامه"] ||
+      rawData["یادداشت نامه"] ||
+      rawAny.note ||
+      rawData.note ||
+      ''
+    ).toString();
 
     // Classify cause using the rule engine
     const causeInfo = classifyLetterCause({
@@ -700,7 +788,7 @@ export function processRawLetters(
       note
     }, exclusionRules);
 
-    const rawId = rawAny["شناسه"] ?? rawAny["شماره"] ?? rawAny["کد"] ?? rawAny["id"] ?? rawAny["ID"];
+    const rawId = rawAny["شناسه"] ?? rawData["شناسه"] ?? rawAny["شماره"] ?? rawData["شماره"] ?? rawAny["کد"] ?? rawData["کد"] ?? rawAny.id ?? rawData.id ?? rawData._dbId;
     const uniqueId = `letter-${registrationNumber ? `reg-${registrationNumber}-` : (rawId ? `${rawId}-` : '')}${index + 1}`;
     const displayId = registrationNumber || (rawId !== undefined && rawId !== null && rawId !== '' ? rawId : (index + 1));
 
@@ -1014,7 +1102,8 @@ export function computeMonthlyMatrix(letters: ProcessedLetter[]): {
     });
 
     uLetters.forEach(l => {
-      const uKey = l.registrationNumber || l.normalizedSubjectKey || l.id;
+      // Each letter/request row in the dataset represents an independent document/record
+      const uKey = l.id || l.registrationNumber || l.normalizedSubjectKey;
       grandUniqueSubjectSet.add(uKey);
       unitUniqueSubjects.add(uKey);
 

@@ -578,8 +578,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
       if (selectedUnits.length > 0 && !selectedUnits.includes(letter.orgUnit)) {
         return false;
       }
-      // Month filter
-      if (selectedMonth !== 'all' && letter.month !== selectedMonth) {
+      // Month filter (applied when no explicit date range is active, or if matching)
+      if (selectedMonth !== 'all' && (!startDate && !endDate) && letter.month !== selectedMonth) {
         return false;
       }
       // Type filter (حذف / ویرایش)
@@ -639,7 +639,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
     const causeCountMap = new Map<string, number>();
 
     filteredLetters.forEach(l => {
-      const uKey = l.registrationNumber || l.normalizedSubjectKey || l.id;
+      const uKey = l.id || l.registrationNumber || l.normalizedSubjectKey;
       uniqueKeys.add(uKey);
       if (l.actionType === 'حذف') deletes++;
       else edits++;
@@ -859,7 +859,13 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
   // Chart 3 Data: Monthly Trend
   const monthlyTrendData = useMemo(() => {
     const monthMap: { [m: string]: { month: string; monthLabel: string; deletes: number; edits: number; total: number } } = {};
-    allMonths.forEach(m => {
+    
+    // If date range is active, only show months that exist in filteredLetters, otherwise show allMonths
+    const targetMonths = (startDate || endDate)
+      ? Array.from(new Set(filteredLetters.map(l => l.month))).filter(Boolean).sort()
+      : allMonths;
+
+    targetMonths.forEach(m => {
       const [y, mm] = m.split('/');
       monthMap[m] = {
         month: m,
@@ -871,18 +877,26 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
     });
 
     filteredLetters.forEach(l => {
-      if (monthMap[l.month]) {
-        if (l.actionType === 'حذف') {
-          monthMap[l.month].deletes++;
-        } else {
-          monthMap[l.month].edits++;
-        }
-        monthMap[l.month].total++;
+      if (!monthMap[l.month]) {
+        const [y, mm] = l.month ? l.month.split('/') : ['', ''];
+        monthMap[l.month] = {
+          month: l.month,
+          monthLabel: `${PERSIAN_MONTH_NAMES[mm] || mm} ${y}`,
+          deletes: 0,
+          edits: 0,
+          total: 0
+        };
       }
+      if (l.actionType === 'حذف') {
+        monthMap[l.month].deletes++;
+      } else {
+        monthMap[l.month].edits++;
+      }
+      monthMap[l.month].total++;
     });
 
-    return Object.values(monthMap);
-  }, [filteredLetters, allMonths]);
+    return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
+  }, [filteredLetters, allMonths, startDate, endDate]);
 
   // Paginated letters list (client vs server database mode adaptive)
   const clientTotalPages = Math.ceil(filteredLetters.length / pageSize) || 1;
@@ -1114,8 +1128,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
             </select>
           </div>
 
-          {/* Date Range Popover Trigger */}
-          <div className="relative" ref={chartDateFilterRef}>
+          {/* Date Filter Trigger in Filter Panel */}
+          <div>
             <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
               فیلتر تاریخ (شمسی):
             </label>
@@ -1124,7 +1138,11 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
               onClick={() => {
                 setTempStartDate(startDate);
                 setTempEndDate(endDate);
-                setIsChartDateFilterOpen(prev => !prev);
+                setIsChartDateFilterOpen(true);
+                const chartSection = document.getElementById('charts-analytics-header');
+                if (chartSection) {
+                  chartSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
               }}
               className={`w-full flex items-center justify-between text-xs px-3 py-2 rounded-xl border font-bold transition cursor-pointer ${
                 startDate || endDate
@@ -1135,226 +1153,10 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
               <span className="truncate">
                 {startDate || endDate
                   ? `${startDate ? startDate.slice(5) : '...'} تا ${endDate ? endDate.slice(5) : '...'}`
-                  : 'انتخاب بازه تاریخ...'}
+                  : 'انتخاب بازه تاریخ / ماه‌ها...'}
               </span>
               <CalendarRange className={`h-4 w-4 shrink-0 mr-1 ${startDate || endDate ? 'text-emerald-700' : 'text-[#545D4B]'}`} />
             </button>
-
-            {/* Date Range Popover */}
-            {isChartDateFilterOpen && (
-              <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
-                {/* Popover Header */}
-                <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
-                    <CalendarRange className="h-4 w-4 text-[#545D4B]" />
-                    <span>فیلتر تاریخ و ماه‌های آماده</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsChartDateFilterOpen(false)}
-                    className="text-[#8A8880] hover:text-[#2D2C28] p-1 rounded-lg hover:bg-[#F5F5F0] transition cursor-pointer"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
-                {/* Section 1: Recent Period Presets */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-[#75746E] flex items-center gap-1">
-                    <Clock className="h-3 w-3 text-[#545D4B]" />
-                    <span>دوره‌های زمانی اخیر و پرکاربرد:</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const s = getJalaliMonthsAgo(1);
-                        const e = curJalali.str;
-                        setTempStartDate(s);
-                        setTempEndDate(e);
-                        setStartDate(s);
-                        setEndDate(e);
-                        setIsChartDateFilterOpen(false);
-                      }}
-                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
-                        startDate === getJalaliMonthsAgo(1) && endDate === curJalali.str
-                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
-                      }`}
-                    >
-                      ماه اخیر
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const s = getJalaliMonthsAgo(3);
-                        const e = curJalali.str;
-                        setTempStartDate(s);
-                        setTempEndDate(e);
-                        setStartDate(s);
-                        setEndDate(e);
-                        setIsChartDateFilterOpen(false);
-                      }}
-                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
-                        startDate === getJalaliMonthsAgo(3) && endDate === curJalali.str
-                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
-                      }`}
-                    >
-                      ۳ ماه اخیر
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const s = getJalaliMonthsAgo(6);
-                        const e = curJalali.str;
-                        setTempStartDate(s);
-                        setTempEndDate(e);
-                        setStartDate(s);
-                        setEndDate(e);
-                        setIsChartDateFilterOpen(false);
-                      }}
-                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
-                        startDate === getJalaliMonthsAgo(6) && endDate === curJalali.str
-                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
-                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
-                      }`}
-                    >
-                      ۶ ماه اخیر
-                    </button>
-                  </div>
-                </div>
-
-                {/* Section 2: Persian Months Grid */}
-                <div className="space-y-2 pt-1 border-t border-[#E8E6DF]">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-bold text-[#75746E] flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3 text-[#545D4B]" />
-                      <span>ماه‌های آماده سال:</span>
-                    </label>
-                    {allYears.length > 1 ? (
-                      <div className="flex items-center gap-1">
-                        {allYears.map(yr => (
-                          <button
-                            key={yr}
-                            type="button"
-                            onClick={() => setFilterYear(yr)}
-                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md transition cursor-pointer ${
-                              (filterYear || allYears[0] || String(curJalali.year)) === yr
-                                ? 'bg-[#545D4B] text-white'
-                                : 'bg-[#EAEAE5] text-[#545D4B] hover:bg-[#DDDBCF]'
-                            }`}
-                          >
-                            {yr}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-[10px] font-bold text-[#545D4B]">
-                        سال {filterYear || allYears[0] || String(curJalali.year)}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-4 gap-1">
-                    {PERSIAN_MONTHS_LIST.map((mItem) => {
-                      const targetYear = filterYear || allYears[0] || String(curJalali.year);
-                      const mStart = `${targetYear}/${mItem.num}/01`;
-                      const mEnd = `${targetYear}/${mItem.num}/${String(mItem.days).padStart(2, '0')}`;
-                      const isSelected = startDate === mStart && endDate === mEnd;
-
-                      return (
-                        <button
-                          key={mItem.name}
-                          type="button"
-                          onClick={() => {
-                            setTempStartDate(mStart);
-                            setTempEndDate(mEnd);
-                            setStartDate(mStart);
-                            setEndDate(mEnd);
-                            setIsChartDateFilterOpen(false);
-                          }}
-                          className={`px-1 py-1.5 text-[11px] font-bold rounded-lg border transition cursor-pointer text-center ${
-                            isSelected
-                              ? 'bg-[#545D4B] text-white border-[#545D4B] shadow-2xs'
-                              : 'bg-[#F9F9F6] text-[#54534F] border-[#E8E6DF] hover:bg-[#EAEAE5] hover:text-[#2D2C28]'
-                          }`}
-                        >
-                          {mItem.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Section 3: Custom Date Range Form */}
-                <div className="space-y-2 pt-1 border-t border-[#E8E6DF]">
-                  <label className="text-[10px] font-bold text-[#75746E] block">
-                    یا تعیین بازه تاریخی دستی:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-[#2D2C28]">از تاریخ:</span>
-                      <JalaliDateInput
-                        value={tempStartDate}
-                        onChange={setTempStartDate}
-                        onEnter={() => {
-                          setStartDate(tempStartDate.trim());
-                          setEndDate(tempEndDate.trim());
-                          setIsChartDateFilterOpen(false);
-                        }}
-                        placeholder="۱۴۰X/MM/DD"
-                        inputClassName="bg-[#FAFAF7] focus:bg-white text-xs"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <span className="text-[10px] font-bold text-[#2D2C28]">تا تاریخ:</span>
-                      <JalaliDateInput
-                        value={tempEndDate}
-                        onChange={setTempEndDate}
-                        onEnter={() => {
-                          setStartDate(tempStartDate.trim());
-                          setEndDate(tempEndDate.trim());
-                          setIsChartDateFilterOpen(false);
-                        }}
-                        placeholder="۱۴۰X/MM/DD"
-                        inputClassName="bg-[#FAFAF7] focus:bg-white text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center gap-2 pt-2 border-t border-[#E8E6DF]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStartDate(tempStartDate.trim());
-                      setEndDate(tempEndDate.trim());
-                      setIsChartDateFilterOpen(false);
-                    }}
-                    className="flex-1 bg-[#545D4B] hover:bg-[#434A3C] text-white py-1.5 px-3 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
-                  >
-                    اعمال فیلتر
-                  </button>
-                  {(startDate || endDate || tempStartDate || tempEndDate) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempStartDate('');
-                        setTempEndDate('');
-                        setStartDate('');
-                        setEndDate('');
-                        setIsChartDateFilterOpen(false);
-                      }}
-                      className="bg-[#FAECE8] hover:bg-[#F5D8D0] text-[#9C3A27] py-1.5 px-3 rounded-xl text-xs font-bold border border-[#F2D1CA] transition cursor-pointer"
-                    >
-                      پاک کردن
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Search Query */}
@@ -1444,66 +1246,416 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
       </div>
 
       {/* Visual Charts Header & Switcher Toolbar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAFAF7] p-3.5 rounded-2xl border border-[#E2E0D8] shadow-2xs">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 rounded-xl bg-[#EFEFEA] text-[#545D4B] border border-[#DDDBCF]">
-            <Activity className="h-4 w-4" />
+      <div id="charts-analytics-header" className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-[#FAFAF7] p-4 rounded-3xl border border-[#E2E0D8] shadow-2xs">
+        {/* Left Side: Title & View Mode Switcher */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-[#EFEFEA] text-[#545D4B] border border-[#DDDBCF]">
+              <Activity className="h-4 w-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-[#2D2C28]">
+                تحلیل بصری و نمودارهای آماری
+              </h4>
+              <p className="text-[10px] text-[#75746E]">
+                {chartViewMode === 'both' && 'حالت دو ستونه: سهم واحدها در کنار مقایسه تفکیکی حذف و ویرایش'}
+                {chartViewMode === 'pie' && 'حالت تمام‌عرض دایره‌ای: تحلیل جامع سهم تمامی واحدهای سازمانی با آمار تفصیلی'}
+                {chartViewMode === 'bar' && 'حالت تمام‌عرض ستونی: بررسی عمیق و مقایسه دقیق حذف/ویرایش تمامی واحدها'}
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-xs font-bold text-[#2D2C28]">
-              تحلیل بصری و نمودارهای آماری
-            </h4>
-            <p className="text-[10px] text-[#75746E]">
-              {chartViewMode === 'both' && 'حالت دو ستونه: سهم واحدها در کنار مقایسه تفکیکی حذف و ویرایش'}
-              {chartViewMode === 'pie' && 'حالت تمام‌عرض دایره‌ای: تحلیل جامع سهم تمامی واحدهای سازمانی با آمار تفصیلی'}
-              {chartViewMode === 'bar' && 'حالت تمام‌عرض ستونی: بررسی عمیق و مقایسه دقیق حذف/ویرایش تمامی واحدها'}
-            </p>
+
+          {/* Small View Mode Switcher Buttons */}
+          <div className="flex items-center gap-1 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF]">
+            <button
+              type="button"
+              onClick={() => setChartViewMode('both')}
+              title="نمایش همزمان ۲ ستونه (دایره‌ای و میله‌ای کنار هم)"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                chartViewMode === 'both'
+                  ? 'bg-white text-[#2D2C28] shadow-xs border border-[#DDDBCF]'
+                  : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-white/50'
+              }`}
+            >
+              <Columns2 className="h-3.5 w-3.5 text-[#545D4B]" />
+              <span>۲ ستونه</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setChartViewMode('pie')}
+              title="نمایش تمام‌عرض نمودار دایره‌ای با جزئیات کامل واحدها"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                chartViewMode === 'pie'
+                  ? 'bg-white text-[#1E40AF] shadow-xs border border-[#BFDBFE]'
+                  : 'text-[#75746E] hover:text-[#1E40AF] hover:bg-white/50'
+              }`}
+            >
+              <PieIcon className="h-3.5 w-3.5 text-[#2563EB]" />
+              <span>فقط دایره‌ای</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setChartViewMode('bar')}
+              title="نمایش تمام‌عرض نمودار میله‌ای با جزئیات کامل واحدها"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                chartViewMode === 'bar'
+                  ? 'bg-white text-[#9C3A27] shadow-xs border border-[#F2D1CA]'
+                  : 'text-[#75746E] hover:text-[#9C3A27] hover:bg-white/50'
+              }`}
+            >
+              <BarChart3 className="h-3.5 w-3.5 text-[#9C3A27]" />
+              <span>فقط میله‌ای</span>
+            </button>
           </div>
         </div>
 
-        {/* Small View Mode Switcher Buttons */}
-        <div className="flex items-center gap-1 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF] self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={() => setChartViewMode('both')}
-            title="نمایش همزمان ۲ ستونه (دایره‌ای و میله‌ای کنار هم)"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              chartViewMode === 'both'
-                ? 'bg-white text-[#2D2C28] shadow-xs border border-[#DDDBCF]'
-                : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-white/50'
-            }`}
-          >
-            <Columns2 className="h-3.5 w-3.5 text-[#545D4B]" />
-            <span>۲ ستونه (همزمان)</span>
-          </button>
+        {/* Right Side: Date Filter & Presets for Charts (Matching EraDashboard) */}
+        <div className="flex items-center gap-2 flex-wrap relative" ref={chartDateFilterRef}>
+          {/* Quick Period Presets */}
+          <div className="flex items-center gap-1 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF] text-[11px] font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                const s = getJalaliMonthsAgo(3);
+                const e = curJalali.str;
+                setStartDate(s);
+                setEndDate(e);
+                setTempStartDate(s);
+                setTempEndDate(e);
+                setSelectedMonth('all');
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                startDate === getJalaliMonthsAgo(3) && endDate === curJalali.str
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-white/70'
+              }`}
+              title="فیلتر نامه‌های ۳ ماه گذشته تا امروز (فصل اخیر)"
+            >
+              ۳ ماه اخیر
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setChartViewMode('pie')}
-            title="نمایش تمام‌عرض نمودار دایره‌ای با جزئیات کامل واحدها"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              chartViewMode === 'pie'
-                ? 'bg-white text-[#1E40AF] shadow-xs border border-[#BFDBFE]'
-                : 'text-[#75746E] hover:text-[#1E40AF] hover:bg-white/50'
-            }`}
-          >
-            <PieIcon className="h-3.5 w-3.5 text-[#2563EB]" />
-            <span>فقط دایره‌ای (تمام‌عرض)</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                const s = getJalaliMonthsAgo(6);
+                const e = curJalali.str;
+                setStartDate(s);
+                setEndDate(e);
+                setTempStartDate(s);
+                setTempEndDate(e);
+                setSelectedMonth('all');
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                startDate === getJalaliMonthsAgo(6) && endDate === curJalali.str
+                  ? 'bg-emerald-700 text-white shadow-xs'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-white/70'
+              }`}
+              title="فیلتر نامه‌های ۶ ماه گذشته تا امروز (نیم‌سال اخیر)"
+            >
+              ۶ ماه اخیر
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setChartViewMode('bar')}
-            title="نمایش تمام‌عرض نمودار میله‌ای با جزئیات کامل واحدها"
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              chartViewMode === 'bar'
-                ? 'bg-white text-[#9C3A27] shadow-xs border border-[#F2D1CA]'
-                : 'text-[#75746E] hover:text-[#9C3A27] hover:bg-white/50'
-            }`}
-          >
-            <BarChart3 className="h-3.5 w-3.5 text-[#9C3A27]" />
-            <span>فقط میله‌ای (تمام‌عرض)</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setTempStartDate('');
+                setTempEndDate('');
+                setSelectedMonth('all');
+                setCurrentPage(1);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
+                !startDate && !endDate && selectedMonth === 'all'
+                  ? 'bg-[#545D4B] text-white shadow-xs'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-white/70'
+              }`}
+              title="نمایش تمامی ماه‌ها بدون محدودیت تاریخ"
+            >
+              همه ماه‌ها
+            </button>
+          </div>
+
+          {/* Date Filter Popover Toggle */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setTempStartDate(startDate);
+                setTempEndDate(endDate);
+                setIsChartDateFilterOpen(prev => !prev);
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer border ${
+                startDate || endDate
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-300 hover:bg-emerald-100'
+                  : 'bg-white text-[#2D2C28] border-[#DDDBCF] hover:border-[#545D4B]'
+              }`}
+              title="فیلتر تاریخ و ماه‌های سال برای نمودارها و جدول"
+            >
+              <CalendarRange className={`h-3.5 w-3.5 ${startDate || endDate ? 'text-emerald-700' : 'text-[#545D4B]'}`} />
+              <span>
+                {startDate || endDate
+                  ? `بازه: ${startDate ? startDate.slice(5) : '...'} تا ${endDate ? endDate.slice(5) : '...'}`
+                  : 'فیلتر تاریخ / انتخاب ماه'}
+              </span>
+            </button>
+
+            {/* Date Filter Popover */}
+            {isChartDateFilterOpen && (
+              <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                {/* Popover Header */}
+                <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
+                    <CalendarRange className="h-4 w-4 text-[#545D4B]" />
+                    <span>فیلتر تاریخ و ماه‌های آماده</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsChartDateFilterOpen(false)}
+                    className="text-[#8A8880] hover:text-[#2D2C28] p-1 rounded-lg hover:bg-[#F5F5F0] transition cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+
+                {/* Section 1: Recent Period Presets */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[#75746E] flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-[#545D4B]" />
+                    <span>دوره‌های زمانی اخیر و پرکاربرد:</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const s = getJalaliMonthsAgo(1);
+                        const e = curJalali.str;
+                        setTempStartDate(s);
+                        setTempEndDate(e);
+                        setStartDate(s);
+                        setEndDate(e);
+                        setSelectedMonth('all');
+                        setIsChartDateFilterOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
+                        startDate === getJalaliMonthsAgo(1) && endDate === curJalali.str
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
+                      }`}
+                    >
+                      ماه اخیر
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const s = getJalaliMonthsAgo(3);
+                        const e = curJalali.str;
+                        setTempStartDate(s);
+                        setTempEndDate(e);
+                        setStartDate(s);
+                        setEndDate(e);
+                        setSelectedMonth('all');
+                        setIsChartDateFilterOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
+                        startDate === getJalaliMonthsAgo(3) && endDate === curJalali.str
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
+                      }`}
+                    >
+                      ۳ ماه اخیر
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const s = getJalaliMonthsAgo(6);
+                        const e = curJalali.str;
+                        setTempStartDate(s);
+                        setTempEndDate(e);
+                        setStartDate(s);
+                        setEndDate(e);
+                        setSelectedMonth('all');
+                        setIsChartDateFilterOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-1.5 text-[11px] font-bold rounded-xl border transition cursor-pointer text-center ${
+                        startDate === getJalaliMonthsAgo(6) && endDate === curJalali.str
+                          ? 'bg-emerald-700 text-white border-emerald-700 shadow-xs'
+                          : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EAEAE5]'
+                      }`}
+                    >
+                      ۶ ماه اخیر
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section 2: Persian Months Grid */}
+                <div className="space-y-2 pt-1 border-t border-[#E8E6DF]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-bold text-[#75746E] flex items-center gap-1">
+                      <CalendarDays className="h-3 w-3 text-[#545D4B]" />
+                      <span>ماه‌های آماده سال:</span>
+                    </label>
+                    {allYears.length > 1 ? (
+                      <div className="flex items-center gap-1">
+                        {allYears.map(yr => (
+                          <button
+                            key={yr}
+                            type="button"
+                            onClick={() => setFilterYear(yr)}
+                            className={`px-1.5 py-0.5 text-[10px] font-bold rounded-md transition cursor-pointer ${
+                              (filterYear || allYears[0] || String(curJalali.year)) === yr
+                                ? 'bg-[#545D4B] text-white'
+                                : 'bg-[#EAEAE5] text-[#545D4B] hover:bg-[#DDDBCF]'
+                            }`}
+                          >
+                            {yr}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold text-[#545D4B]">
+                        سال {filterYear || allYears[0] || String(curJalali.year)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1">
+                    {PERSIAN_MONTHS_LIST.map((mItem) => {
+                      const targetYear = filterYear || allYears[0] || String(curJalali.year);
+                      const mStart = `${targetYear}/${mItem.num}/01`;
+                      const mEnd = `${targetYear}/${mItem.num}/${String(mItem.days).padStart(2, '0')}`;
+                      const isSelected = startDate === mStart && endDate === mEnd;
+
+                      return (
+                        <button
+                          key={mItem.name}
+                          type="button"
+                          onClick={() => {
+                            setTempStartDate(mStart);
+                            setTempEndDate(mEnd);
+                            setStartDate(mStart);
+                            setEndDate(mEnd);
+                            setSelectedMonth('all');
+                            setIsChartDateFilterOpen(false);
+                            setCurrentPage(1);
+                          }}
+                          className={`px-1 py-1.5 text-[11px] font-bold rounded-lg border transition cursor-pointer text-center ${
+                            isSelected
+                              ? 'bg-[#545D4B] text-white border-[#545D4B] shadow-2xs'
+                              : 'bg-[#F9F9F6] text-[#54534F] border-[#E8E6DF] hover:bg-[#EAEAE5] hover:text-[#2D2C28]'
+                          }`}
+                        >
+                          {mItem.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Section 3: Custom Date Range Form */}
+                <div className="space-y-2 pt-1 border-t border-[#E8E6DF]">
+                  <label className="text-[10px] font-bold text-[#75746E] block">
+                    یا تعیین بازه تاریخی دستی:
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-[#2D2C28]">از تاریخ:</span>
+                      <JalaliDateInput
+                        value={tempStartDate}
+                        onChange={setTempStartDate}
+                        onEnter={() => {
+                          setStartDate(tempStartDate.trim());
+                          setEndDate(tempEndDate.trim());
+                          setSelectedMonth('all');
+                          setIsChartDateFilterOpen(false);
+                          setCurrentPage(1);
+                        }}
+                        placeholder="۱۴۰X/MM/DD"
+                        inputClassName="bg-[#FAFAF7] focus:bg-white text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-bold text-[#2D2C28]">تا تاریخ:</span>
+                      <JalaliDateInput
+                        value={tempEndDate}
+                        onChange={setTempEndDate}
+                        onEnter={() => {
+                          setStartDate(tempStartDate.trim());
+                          setEndDate(tempEndDate.trim());
+                          setSelectedMonth('all');
+                          setIsChartDateFilterOpen(false);
+                          setCurrentPage(1);
+                        }}
+                        placeholder="۱۴۰X/MM/DD"
+                        inputClassName="bg-[#FAFAF7] focus:bg-white text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 pt-2 border-t border-[#E8E6DF]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStartDate(tempStartDate.trim());
+                      setEndDate(tempEndDate.trim());
+                      setSelectedMonth('all');
+                      setIsChartDateFilterOpen(false);
+                      setCurrentPage(1);
+                    }}
+                    className="flex-1 bg-[#545D4B] hover:bg-[#434A3C] text-white py-1.5 px-3 rounded-xl text-xs font-bold shadow-2xs transition cursor-pointer"
+                  >
+                    اعمال فیلتر
+                  </button>
+                  {(startDate || endDate || tempStartDate || tempEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTempStartDate('');
+                        setTempEndDate('');
+                        setStartDate('');
+                        setEndDate('');
+                        setSelectedMonth('all');
+                        setIsChartDateFilterOpen(false);
+                        setCurrentPage(1);
+                      }}
+                      className="bg-[#FAECE8] hover:bg-[#F5D8D0] text-[#9C3A27] py-1.5 px-3 rounded-xl text-xs font-bold border border-[#F2D1CA] transition cursor-pointer"
+                    >
+                      پاک کردن
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Clear Date Filter Button */}
+          {(startDate || endDate) && (
+            <button
+              type="button"
+              onClick={() => {
+                setStartDate('');
+                setEndDate('');
+                setTempStartDate('');
+                setTempEndDate('');
+                setSelectedMonth('all');
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-1 text-[11px] font-bold text-[#9C3A27] bg-[#FAECE8] hover:bg-[#F5D8D0] px-2.5 py-1.5 rounded-xl border border-[#F2D1CA] transition cursor-pointer"
+              title="حذف فیلتر تاریخ و نمایش کلیه بازه‌های زمانی"
+            >
+              <X className="h-3.5 w-3.5" />
+              <span>حذف فیلتر تاریخ</span>
+            </button>
+          )}
         </div>
       </div>
 
