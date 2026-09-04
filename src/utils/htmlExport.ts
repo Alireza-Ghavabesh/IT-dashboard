@@ -341,42 +341,81 @@ export function generateStandalonePresentationHtml(
     .stage {
       flex: 1;
       display: flex;
-      align-items: center;
+      align-items: stretch;
       justify-content: center;
-      padding: 24px;
+      padding: 12px 18px;
       overflow: hidden;
       position: relative;
       background: #F4F3EE;
+      width: 100vw;
+      height: calc(100vh - 56px);
     }
 
-    /* Slide Card Frame (16:9 Aspect Ratio Container) */
+    /* Slide Card Frame - Fluid & Full Screen */
     .slide-frame {
       width: 100%;
-      max-width: 1280px;
+      max-width: 100%;
       height: 100%;
-      max-height: 720px;
+      max-height: 100%;
       background: #FFFFFF;
       border: 1px solid #DDDBCF;
-      border-radius: 24px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.07);
-      padding: 28px 36px;
+      border-radius: 20px;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.06);
+      padding: 20px 28px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       position: relative;
       overflow: hidden;
-      animation: fadeIn 0.25s ease-out;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    /* Fullscreen Presentation Mode - Fills display with zero wasted space */
+    :fullscreen #app,
+    :-webkit-full-screen #app,
+    body.is-fullscreen #app {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    :fullscreen .toolbar,
+    :-webkit-full-screen .toolbar,
+    body.is-fullscreen .toolbar {
+      height: 48px;
+      padding: 0 16px;
+    }
+
+    :fullscreen .stage,
+    :-webkit-full-screen .stage,
+    body.is-fullscreen .stage {
+      padding: 6px 10px !important;
+      background: #EAE9E3 !important;
+      width: 100vw !important;
+      height: calc(100vh - 48px) !important;
+    }
+
+    :fullscreen .slide-frame,
+    :-webkit-full-screen .slide-frame,
+    body.is-fullscreen .slide-frame {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      border-radius: 14px !important;
+      padding: 18px 24px !important;
+      box-shadow: 0 2px 16px rgba(0, 0, 0, 0.08) !important;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: scale(0.985); }
+      from { opacity: 0; transform: scale(0.99); }
       to { opacity: 1; transform: scale(1); }
     }
 
     /* COVER SLIDE */
     .cover-slide {
       background: #FFFFFF;
-      padding: 48px;
+      padding: clamp(24px, 4vw, 56px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -394,7 +433,7 @@ export function generateStandalonePresentationHtml(
     }
 
     .cover-main-title {
-      font-size: 52px;
+      font-size: clamp(38px, 4.5vw, 64px);
       font-weight: 900;
       color: #1E293B;
       line-height: 1.35;
@@ -409,8 +448,8 @@ export function generateStandalonePresentationHtml(
       justify-content: space-between;
       align-items: center;
       border-bottom: 1px solid #E8E6DF;
-      padding-bottom: 12px;
-      margin-bottom: 14px;
+      padding-bottom: 10px;
+      margin-bottom: 10px;
       flex-shrink: 0;
     }
 
@@ -446,11 +485,11 @@ export function generateStandalonePresentationHtml(
     }
 
     .slide-title {
-      font-size: 22px;
+      font-size: clamp(20px, 1.8vw, 28px);
       font-weight: 900;
       color: #2D2C28;
       margin: 0;
-      line-height: 1.2;
+      line-height: 1.25;
     }
 
     .slide-meta {
@@ -464,11 +503,11 @@ export function generateStandalonePresentationHtml(
 
     .slide-body {
       display: grid;
-      gap: 20px;
+      gap: 16px;
       flex: 1;
       min-height: 0;
       align-items: stretch;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
     .slide-body-2col {
@@ -483,13 +522,15 @@ export function generateStandalonePresentationHtml(
     .screenshot-col {
       background: #FAFAF7;
       border: 1px solid #DDDBCF;
-      border-radius: 18px;
-      padding: 14px;
+      border-radius: 16px;
+      padding: 12px 14px;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
       overflow: hidden;
       position: relative;
+      min-height: 0;
+      height: 100%;
     }
 
     .screenshot-title {
@@ -527,7 +568,9 @@ export function generateStandalonePresentationHtml(
 
     .screenshot-stage {
       flex: 1;
-      min-height: 200px;
+      min-height: 0;
+      height: 100%;
+      width: 100%;
       background: #FFFFFF;
       border-radius: 12px;
       border: 1px dashed #DDDBCF;
@@ -559,7 +602,9 @@ export function generateStandalonePresentationHtml(
 
     .image-slider-track img {
       max-width: 100%;
-      max-height: 270px;
+      max-height: 100%;
+      width: auto;
+      height: auto;
       object-fit: contain;
       border-radius: 8px;
       transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
@@ -704,16 +749,16 @@ export function generateStandalonePresentationHtml(
     }
 
     .summary-strip {
-      margin-top: 10px;
+      margin-top: 8px;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 10px;
       flex-shrink: 0;
     }
 
     .summary-box {
-      border-radius: 10px;
-      padding: 8px 10px;
+      border-radius: 12px;
+      padding: 10px 14px;
     }
 
     .box-red {
@@ -727,7 +772,7 @@ export function generateStandalonePresentationHtml(
     }
 
     .box-label {
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 900;
       margin-bottom: 3px;
     }
@@ -741,10 +786,10 @@ export function generateStandalonePresentationHtml(
     }
 
     .box-content {
-      font-size: 10.5px;
+      font-size: 12px;
       color: #2D2C28;
-      line-height: 1.4;
-      max-height: 48px;
+      line-height: 1.5;
+      max-height: 85px;
       overflow-y: auto;
     }
 
@@ -754,21 +799,24 @@ export function generateStandalonePresentationHtml(
       flex-direction: column;
       gap: 12px;
       justify-content: space-between;
+      min-height: 0;
+      height: 100%;
     }
 
     .achievements-box {
       flex: 1;
+      min-height: 0;
       background: #FFFFFF;
       border: 1px solid #DDDBCF;
-      border-radius: 18px;
-      padding: 16px 18px;
+      border-radius: 16px;
+      padding: 16px 20px;
       display: flex;
       flex-direction: column;
       box-shadow: 0 1px 3px rgba(0,0,0,0.03);
     }
 
     .achievements-title {
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 900;
       color: #065F46;
       border-bottom: 1px solid #E8E6DF;
@@ -776,7 +824,8 @@ export function generateStandalonePresentationHtml(
       margin-bottom: 10px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
+      flex-shrink: 0;
     }
 
     .achievements-list {
@@ -790,22 +839,22 @@ export function generateStandalonePresentationHtml(
     .ach-item {
       display: flex;
       align-items: flex-start;
-      gap: 8px;
-      font-size: 11.5px;
+      gap: 10px;
+      font-size: 12.5px;
       color: #2D2C28;
-      line-height: 1.45;
+      line-height: 1.55;
     }
 
     .ach-tick {
       background: #D1FAE5;
       color: #065F46;
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: bold;
       flex-shrink: 0;
       margin-top: 1px;
@@ -814,44 +863,45 @@ export function generateStandalonePresentationHtml(
     .metrics-box {
       background: #FAFAF7;
       border: 1px solid #DDDBCF;
-      border-radius: 18px;
-      padding: 12px 16px;
+      border-radius: 16px;
+      padding: 12px 18px;
+      flex-shrink: 0;
     }
 
     .metrics-title {
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 900;
       color: #545D4B;
       margin-bottom: 8px;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
     }
 
     .metrics-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 8px;
+      gap: 10px;
     }
 
     .metric-card {
       background: #FFFFFF;
       border: 1px solid #DDDBCF;
       border-radius: 12px;
-      padding: 8px 10px;
+      padding: 10px 12px;
       text-align: center;
       box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }
 
     .metric-name {
-      font-size: 10px;
+      font-size: 11px;
       color: #75746E;
       margin-bottom: 3px;
       font-weight: bold;
     }
 
     .metric-val {
-      font-size: 11px;
+      font-size: 13.5px;
       font-weight: 900;
       line-height: 1.3;
       color: #2D2C28;
@@ -1707,6 +1757,17 @@ export function generateStandalonePresentationHtml(
       }
     }
     document.getElementById('btnFullscreen').addEventListener('click', toggleFullscreen);
+
+    function handleFullscreenChange() {
+      const isFs = !!document.fullscreenElement;
+      document.body.classList.toggle('is-fullscreen', isFs);
+      const fsBtn = document.getElementById('btnFullscreen');
+      if (fsBtn) {
+        fsBtn.innerHTML = isFs ? '<span>🗗 خروج از تمام‌صفحه</span>' : '<span>⛶ تمام‌صفحه</span>';
+      }
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
 
     // Outline Modal
     function openOutline() {

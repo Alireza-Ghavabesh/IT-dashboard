@@ -190,6 +190,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
     e?.stopPropagation();
     setZoomScale(1);
     setPanPosition({ x: 0, y: 0 });
+    setIsPanning(false);
   };
 
   const handleSetZoomLevel = (level: number, e?: React.MouseEvent) => {
@@ -197,6 +198,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
     setZoomScale(level);
     if (level === 1) {
       setPanPosition({ x: 0, y: 0 });
+      setIsPanning(false);
     }
   };
 
@@ -1234,11 +1236,11 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
               <button
                 type="button"
                 onClick={handleResetZoom}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition cursor-pointer border border-white/20"
-                title="بازنشانی اندازه اصلی (کلید 0 یا R)"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition cursor-pointer border border-white/20 shadow-xs"
+                title="بازنشانی به سایز اصلی تصویر (کلید 0 یا R)"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span className="hidden md:inline">اندازه مناسب</span>
+                <RotateCcw className="h-3.5 w-3.5 text-emerald-400" />
+                <span>سایز اصلی</span>
               </button>
 
               {/* Close Button */}
@@ -1255,12 +1257,20 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
 
           {/* Centered Image Viewing Stage with Drag & Wheel Pan */}
           <div
-            className={`relative flex-1 w-full max-w-7xl flex items-center justify-center overflow-hidden my-2 sm:my-3 rounded-2xl border border-white/10 bg-slate-950/60 backdrop-blur-xs ${
+            className={`relative flex-1 w-full max-w-[96vw] flex items-center justify-center overflow-hidden my-2 sm:my-3 rounded-2xl border border-white/10 bg-slate-950/70 backdrop-blur-xs px-2 sm:px-6 ${
               zoomScale > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
             }`}
             onClick={e => {
               e.stopPropagation();
               if (zoomScale === 1) {
+                setZoomScale(1.8);
+              }
+            }}
+            onDoubleClick={e => {
+              e.stopPropagation();
+              if (zoomScale > 1) {
+                handleResetZoom();
+              } else {
                 setZoomScale(2);
               }
             }}
@@ -1278,10 +1288,10 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
               }}
             >
               <img
-                src={previewModalImg}
+                src={previewModalImg || (currentImages && currentImages[activeImageIndex]) || ''}
                 alt="Full Preview"
                 draggable={false}
-                className="max-h-[75vh] max-w-[85vw] w-auto h-auto object-contain rounded-xl shadow-2xl pointer-events-none select-none"
+                className="max-h-[76vh] sm:max-h-[80vh] max-w-full w-auto h-auto object-contain rounded-xl shadow-2xl pointer-events-none select-none"
               />
             </div>
 
@@ -1292,28 +1302,34 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActiveImageIndex(prev => (prev > 0 ? prev - 1 : currentImages.length - 1));
+                    const nextIdx = activeImageIndex > 0 ? activeImageIndex - 1 : currentImages.length - 1;
+                    setActiveImageIndex(nextIdx);
+                    setPreviewModalImg(currentImages[nextIdx] || null);
                     setZoomScale(1);
                     setPanPosition({ x: 0, y: 0 });
+                    setIsPanning(false);
                   }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-black/60 hover:bg-black/90 text-white border border-white/20 transition cursor-pointer shadow-xl backdrop-blur-md"
+                  className="absolute right-3 sm:right-6 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-2xl bg-black/50 hover:bg-black/80 text-white border border-white/20 transition cursor-pointer shadow-xl backdrop-blur-md z-20"
                   title="تصویر قبلی (کلید جهت‌نما راست)"
                 >
-                  <ChevronRight className="h-6 w-6" />
+                  <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
 
                 <button
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setActiveImageIndex(prev => (prev < currentImages.length - 1 ? prev + 1 : 0));
+                    const nextIdx = activeImageIndex < currentImages.length - 1 ? activeImageIndex + 1 : 0;
+                    setActiveImageIndex(nextIdx);
+                    setPreviewModalImg(currentImages[nextIdx] || null);
                     setZoomScale(1);
                     setPanPosition({ x: 0, y: 0 });
+                    setIsPanning(false);
                   }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-2xl bg-black/60 hover:bg-black/90 text-white border border-white/20 transition cursor-pointer shadow-xl backdrop-blur-md"
+                  className="absolute left-3 sm:left-6 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-2xl bg-black/50 hover:bg-black/80 text-white border border-white/20 transition cursor-pointer shadow-xl backdrop-blur-md z-20"
                   title="تصویر بعدی (کلید جهت‌نما چپ)"
                 >
-                  <ChevronLeft className="h-6 w-6" />
+                  <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
                 </button>
               </>
             )}
@@ -1323,8 +1339,8 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
               <Move className="h-3.5 w-3.5 text-emerald-400" />
               <span>
                 {zoomScale > 1
-                  ? 'برای جابجایی تصویر را با ماوس بکشید یا اسکرول کنید | کلید Esc: بستن'
-                  : 'با اسکرول ماوس یا دکمه‌های بالا زوم کنید | کلیک: زوم ۲ برابر'}
+                  ? 'برای جابجایی تصویر را با ماوس بکشید | کلید 0 یا دکمه «سایز اصلی» برای بازگشت'
+                  : 'با اسکرول ماوس یا دکمه‌ها زوم کنید | کلیک: زوم | کلید Esc: بستن'}
               </span>
             </div>
           </div>
