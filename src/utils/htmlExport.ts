@@ -1,5 +1,6 @@
 import { ProcessedEraItem } from '../types';
 import { getProcessPresentation, ProcessPresentationDetail } from '../data/presentationTemplates';
+import { VAZIRMATN_WOFF2_BASE64 } from './vazirmatnBase64';
 
 const toPersianDigits = (n: number | string): string => {
   const farsiDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
@@ -204,7 +205,14 @@ export function generateStandalonePresentationHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>گزارش واحد IT (نرم افزار)</title>
   <style>
-    @import url('https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css');
+    @font-face {
+      font-family: 'Vazirmatn';
+      src: local('Vazirmatn'),
+           url('data:font/woff2;base64,${VAZIRMATN_WOFF2_BASE64}') format('woff2');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
 
     * {
       box-sizing: border-box;
