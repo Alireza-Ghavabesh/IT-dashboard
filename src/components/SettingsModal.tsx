@@ -44,9 +44,10 @@ import {
   ShieldCheck,
   Image as ImageIcon,
   ImageOff,
-  Presentation
+  Presentation,
+  Workflow
 } from 'lucide-react';
-import { CauseRule, ExclusionRule, ProcessedLetter, EraVisibilitySettings } from '../types';
+import { CauseRule, ExclusionRule, ProcessedLetter, EraVisibilitySettings, EraColumnVisibility, DEFAULT_ERA_COLUMN_VISIBILITY } from '../types';
 import { classifyLetterCause, isLetterExcluded, formatNumber } from '../utils/parser';
 import { SearchableSelect } from './SearchableSelect';
 import { api } from '../services/api';
@@ -88,6 +89,9 @@ interface SettingsModalProps {
   // ERA Dashboard Visibility Settings
   eraVisibility?: EraVisibilitySettings;
   onToggleEraVisibility?: (key: keyof EraVisibilitySettings, val: boolean) => void;
+  onToggleEraColumnVisibility?: (colKey: keyof EraColumnVisibility, val: boolean) => void;
+  onSetAllEraColumnsVisibility?: (val: boolean) => void;
+  onResetEraColumnsVisibility?: () => void;
   onOpenAiModal?: () => void;
   onDataRestored?: () => Promise<void>;
 }
@@ -142,6 +146,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleFilterExecutionMode,
   eraVisibility = { showHeader: false, showMetrics: false, showEntityChips: false, autoScrollToTable: false, slideHoverPreview: false, showAiChartAnalysis: false, slideBeforeAfterUnderImage: true },
   onToggleEraVisibility,
+  onToggleEraColumnVisibility,
+  onSetAllEraColumnsVisibility,
+  onResetEraColumnsVisibility,
   onOpenAiModal,
   onDataRestored
 }) => {
@@ -238,8 +245,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [editingCauseId, setEditingCauseId] = useState<string | null>(null);
   const [cKeyword, setCKeyword] = useState<string>('');
   const [cCause, setCCause] = useState<string>('بانکی');
-  const [cTargetUnit, setCTargetUnit] = useState<string>('حسابداری مالی');
+  const [cTargetUnit, setCTargetUnit] = useState<string>('all');
   const [cMatchType, setCMatchType] = useState<'contains' | 'exact' | 'startsWith'>('contains');
+  const [cTargetField, setCTargetField] = useState<string>('all');
+  const [cCustomFieldName, setCCustomFieldName] = useState<string>('');
   const [cColor, setCColor] = useState<string>('#2563EB');
   const [cDescription, setCDescription] = useState<string>('');
   const [cSearch, setCSearch] = useState<string>('');
@@ -248,6 +257,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   // Live Cause Test simulator
   const [testCText, setTestCText] = useState<string>('بانک از حساب شرکت برداشت نگردیده است');
   const [testCUnit, setTestCUnit] = useState<string>('حسابداری مالی');
+  const [testCField, setTestCField] = useState<string>('all');
 
   // --- Unit Cause Visibility Dedicated State (Dropdown + List + Save) ---
   const [localVisibilityConfig, setLocalVisibilityConfig] = useState<Record<string, boolean>>({});
@@ -288,6 +298,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'fa'));
+  }, [allLetters]);
+
+  // Distinct columns and attributes extracted from imported dataset & standard headers
+  const availableExcelColumns = useMemo(() => {
+    const colsSet = new Set<string>();
+    const standardFields = [
+      'یادداشت',
+      'موضوع',
+      'شرح',
+      'واحد سازمانی',
+      'گیرنده',
+      'فرستنده',
+      'ایجاد کننده نامه',
+      'نوع مکاتبه',
+      'شماره ثبت',
+      'تاریخ ثبت',
+      'فوریت',
+      'طبقه بندی اطلاعاتی',
+      'جهت مکاتبه'
+    ];
+    standardFields.forEach(f => colsSet.add(f));
+
+    (allLetters || []).forEach(l => {
+      if (l.raw && typeof l.raw === 'object') {
+        Object.keys(l.raw).forEach(k => {
+          if (k && !k.startsWith('_') && k.trim() !== '') {
+            colsSet.add(k.trim());
+          }
+        });
+      }
+    });
+    return Array.from(colsSet);
   }, [allLetters]);
 
   // Unit letter counts for context
@@ -391,12 +433,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   // Live cause test simulation
   const liveCauseResult = useMemo(() => {
+    const rawData: Record<string, any> = {};
+    if (testCField && testCField !== 'all') {
+      rawData[testCField] = testCText;
+    }
     return classifyLetterCause({
       subject: testCText,
       originalSubject: testCText,
-      orgUnit: testCUnit === 'all' ? '' : testCUnit
+      orgUnit: testCUnit === 'all' ? '' : testCUnit,
+      note: testCText,
+      description: testCText,
+      raw: rawData
     }, causeRules);
-  }, [testCText, testCUnit, causeRules]);
+  }, [testCText, testCUnit, testCField, causeRules]);
 
   if (!isOpen) return null;
 
@@ -454,8 +503,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setEditingCauseId(null);
     setCKeyword('');
     setCCause('بانکی');
-    setCTargetUnit('حسابداری مالی');
+    setCTargetUnit('all');
     setCMatchType('contains');
+    setCTargetField('all');
+    setCCustomFieldName('');
     setCColor('#2563EB');
     setCDescription('');
   };
@@ -466,6 +517,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setCCause(rule.cause);
     setCTargetUnit(rule.targetUnit || 'all');
     setCMatchType(rule.matchType || 'contains');
+    const field = rule.targetField || 'all';
+    const standardFields = ['all', 'یادداشت', 'موضوع', 'شرح', 'واحد سازمانی', 'گیرنده', 'فرستنده', 'ایجاد کننده نامه', 'نوع مکاتبه', 'شماره ثبت'];
+    if (availableExcelColumns.includes(field) || standardFields.includes(field)) {
+      setCTargetField(field);
+      setCCustomFieldName('');
+    } else {
+      setCTargetField('custom');
+      setCCustomFieldName(field);
+    }
     setCColor(rule.color || '#2563EB');
     setCDescription(rule.description || '');
   };
@@ -473,6 +533,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const handleSaveCause = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cKeyword.trim() || !cCause.trim()) return;
+
+    const finalField = (cTargetField === 'custom' ? cCustomFieldName.trim() : cTargetField) || 'all';
 
     try {
       setIsSubmittingC(true);
@@ -482,6 +544,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           cause: cCause.trim(),
           targetUnit: cTargetUnit === 'all' ? null : cTargetUnit.trim(),
           matchType: cMatchType,
+          targetField: finalField,
           color: cColor,
           description: cDescription.trim() || null
         });
@@ -491,6 +554,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           cause: cCause.trim(),
           targetUnit: cTargetUnit === 'all' ? null : cTargetUnit.trim(),
           matchType: cMatchType,
+          targetField: finalField,
           color: cColor,
           description: cDescription.trim() || null,
           isActive: true,
@@ -1493,9 +1557,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+                    {/* Target Excel Field / Column */}
+                    <div className="md:col-span-3">
+                      <label className="block text-xs font-bold text-[#2D2C28] mb-1 flex items-center justify-between">
+                        <span>ستون مورد بررسی در فایل اکسل <span className="text-[#9C3A27]">*</span></span>
+                      </label>
+                      <select
+                        value={cTargetField}
+                        onChange={e => setCTargetField(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 text-[#2D2C28] font-medium cursor-pointer"
+                      >
+                        <option value="all">🔍 همه ستون‌ها (پیش‌فرض)</option>
+                        <optgroup label="ستون‌های اصلی و پرکاربرد">
+                          <option value="یادداشت">📝 ستون «یادداشت» (متن یادداشت نامه)</option>
+                          <option value="موضوع">📋 ستون «موضوع» (عنوان نامه)</option>
+                          <option value="شرح">📄 ستون «شرح» (شرح نامه)</option>
+                          <option value="واحد سازمانی">🏢 ستون «واحد سازمانی»</option>
+                          <option value="گیرنده">👤 ستون «گیرنده»</option>
+                          <option value="فرستنده">✉️ ستون «فرستنده»</option>
+                          <option value="ایجاد کننده نامه">✍️ ستون «ایجاد کننده نامه»</option>
+                          <option value="نوع مکاتبه">📌 ستون «نوع مکاتبه»</option>
+                          <option value="شماره ثبت">🔢 ستون «شماره ثبت»</option>
+                        </optgroup>
+                        {availableExcelColumns.filter(c => !['یادداشت', 'موضوع', 'شرح', 'واحد سازمانی', 'گیرنده', 'فرستنده', 'ایجاد کننده نامه', 'نوع مکاتبه', 'شماره ثبت'].includes(c)).length > 0 && (
+                          <optgroup label="سایر ستون‌های اکسل ورودی">
+                            {availableExcelColumns
+                              .filter(c => !['یادداشت', 'موضوع', 'شرح', 'واحد سازمانی', 'گیرنده', 'فرستنده', 'ایجاد کننده نامه', 'نوع مکاتبه', 'شماره ثبت'].includes(c))
+                              .map(c => (
+                                <option key={c} value={c}>🔹 ستون «{c}»</option>
+                              ))}
+                          </optgroup>
+                        )}
+                        <option value="custom">✍️ نام ستون دلخواه دیگر (تایپ دستی)...</option>
+                      </select>
+                      {cTargetField === 'custom' && (
+                        <input
+                          type="text"
+                          required
+                          value={cCustomFieldName}
+                          onChange={e => setCCustomFieldName(e.target.value)}
+                          placeholder="نام ستون در اکسل (مثلاً: یادداشت یا وضعیت تسویه)"
+                          className="w-full mt-2 px-3 py-1.5 text-xs bg-white border border-[#2563EB] rounded-xl focus:outline-none text-[#2D2C28]"
+                        />
+                      )}
+                    </div>
+
                     {/* Keyword Input */}
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-[#2D2C28] mb-1">
                         کلمه یا عبارت کلیدی <span className="text-[#9C3A27]">*</span>
                       </label>
@@ -1504,7 +1613,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         required
                         value={cKeyword}
                         onChange={e => setCKeyword(e.target.value)}
-                        placeholder="مثلاً: برداشت نگردیده یا بانک"
+                        placeholder="مثلاً: عدم تسویه یا برداشت نگردیده"
                         className="w-full px-3.5 py-2 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 text-[#2D2C28]"
                       />
                     </div>
@@ -1519,30 +1628,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         required
                         value={cCause}
                         onChange={e => setCCause(e.target.value)}
-                        placeholder="مثلاً: بانکی"
+                        placeholder="مثلاً: عدم تسویه یا بانکی"
                         className="w-full px-3.5 py-2 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2563EB]/20 text-[#2D2C28]"
                       />
                     </div>
 
-                    {/* Target Unit */}
-                    <div className="md:col-span-3">
-                      <label className="block text-xs font-bold text-[#2D2C28] mb-1">
-                        واحد سازمانی هدف
-                      </label>
-                      <select
-                        value={cTargetUnit}
-                        onChange={e => setCTargetUnit(e.target.value)}
-                        className="w-full px-3 py-2 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl focus:bg-white focus:outline-none text-[#2D2C28]"
-                      >
-                        <option value="all">همه واحدها</option>
-                        {distinctUnits.map(u => (
-                          <option key={u} value={u}>{u}</option>
-                        ))}
-                      </select>
-                    </div>
-
                     {/* Match Type */}
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-[#2D2C28] mb-1">
                         نوع انطباق
                       </label>
@@ -1558,13 +1650,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Color Selector & Description */}
-                  <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5">
+                    {/* Target Unit */}
                     <div className="md:col-span-4">
+                      <label className="block text-xs font-bold text-[#2D2C28] mb-1">
+                        واحد سازمانی هدف
+                      </label>
+                      <select
+                        value={cTargetUnit}
+                        onChange={e => setCTargetUnit(e.target.value)}
+                        className="w-full px-3 py-2 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl focus:bg-white focus:outline-none text-[#2D2C28]"
+                      >
+                        <option value="all">همه واحدها</option>
+                        {distinctUnits.map(u => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Color Selector */}
+                    <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-[#2D2C28] mb-1">
                         رنگ برچسب عامل
                       </label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 pt-1">
                         {PRESET_CAUSE_COLORS.map(c => (
                           <button
                             key={c.value}
@@ -1579,7 +1688,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ))}
                       </div>
                     </div>
-                    <div className="md:col-span-8">
+
+                    {/* Description */}
+                    <div className="md:col-span-5">
                       <label className="block text-xs font-bold text-[#2D2C28] mb-1">
                         شرح و توضیحات قانون
                       </label>
@@ -1619,16 +1730,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                  <div className="md:col-span-8">
+                  <div className="md:col-span-5">
                     <input
                       type="text"
                       value={testCText}
                       onChange={e => setTestCText(e.target.value)}
-                      placeholder="متن نمونه نامه..."
+                      placeholder="متن نمونه نامه یا مقدار فیلد..."
                       className="w-full px-3 py-2 text-xs bg-white border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:outline-none"
                     />
                   </div>
                   <div className="md:col-span-4">
+                    <select
+                      value={testCField}
+                      onChange={e => setTestCField(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:outline-none cursor-pointer"
+                    >
+                      <option value="all">🔍 تست روی همه ستون‌ها</option>
+                      <option value="یادداشت">📝 ستون «یادداشت»</option>
+                      <option value="موضوع">📋 ستون «موضوع»</option>
+                      <option value="شرح">📄 ستون «شرح»</option>
+                      {availableExcelColumns.filter(c => !['یادداشت', 'موضوع', 'شرح'].includes(c)).map(c => (
+                        <option key={c} value={c}>🔹 ستون «{c}»</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="md:col-span-3">
                     <select
                       value={testCUnit}
                       onChange={e => setTestCUnit(e.target.value)}
@@ -1712,6 +1838,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             </span>
                             <span className="font-bold text-[#2D2C28] text-xs">
                               کلمه: «{rule.keyword}»
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-[#EFF6FF] text-[#1E40AF] border border-[#BFDBFE]">
+                              {rule.targetField && rule.targetField !== 'all' ? `ستون: «${rule.targetField}»` : 'همه ستون‌ها'}
                             </span>
                             <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-[#F2F1EB] text-[#5A5852]">
                               {rule.targetUnit ? `واحد: ${rule.targetUnit}` : 'همه واحدها'}
@@ -2708,6 +2837,118 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       </span>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Card: Dynamic Column Visibility for Process (ERA) Table */}
+              <div className="bg-white rounded-2xl p-5 border border-[#E2E0D8] shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E0D8] pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-[#2563EB] text-white shadow-xs shrink-0 mt-0.5">
+                      <SlidersHorizontal className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black text-[#2D2C28]">
+                          مدیریت پویای نمایش تک‌تک ستون‌های جدول فرآیندها (Column Visibility)
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                          کنترل ۱۲ ستون جدول
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#75746E] mt-1 leading-relaxed font-medium">
+                        قابلیت فعال یا غیرفعال کردن نمایش هریک از ستون‌های جدول فرآیندها (شامل ستون BPMN، اسلاید، وضعیت، تاریخ، شرح و سایر موارد) به انتخاب کاربر.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Batch Action Buttons */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onSetAllEraColumnsVisibility && onSetAllEraColumnsVisibility(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-300 transition cursor-pointer"
+                      title="نمایش تمام ستون‌های جدول"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span>نمایش همه ستون‌ها</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onResetEraColumnsVisibility && onResetEraColumnsVisibility()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F5F4EE] text-[#545D4B] hover:text-[#2D2C28] text-xs font-bold border border-[#DDDBCF] transition cursor-pointer shadow-2xs"
+                      title="بازنشانی وضعیت ستون‌ها به حالت پیش‌فرض"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>بازنشانی پیش‌فرض</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Columns Toggle Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 text-xs">
+                  {[
+                    { key: 'index' as const, label: 'شماره ردیف (#)', desc: 'شمارنده و ایندکس ردیف در جدول', icon: SlidersHorizontal },
+                    { key: 'processName' as const, label: 'نام فرآیند / موجودیت', desc: 'عنوان کامل فرآیند، فرم، یا گزارش', icon: FileSpreadsheet },
+                    { key: 'entityType' as const, label: 'نوع موجودیت', desc: 'تفکیک برچسب فرآیند، فرم یا گزارش', icon: Layers },
+                    { key: 'orgUnit' as const, label: 'واحد سازمانی', desc: 'دپارتمان یا واحد متولی سازمانی', icon: HardDrive },
+                    { key: 'executionDate' as const, label: 'تاریخ انجام', desc: 'تاریخ ثبت و انجام عملیات فرآیندی', icon: Info },
+                    { key: 'operationType' as const, label: 'نوع عملیات', desc: 'جدید، اصلاح یا اتوماتیک‌سازی', icon: Tag },
+                    { key: 'status' as const, label: 'وضعیت انجام', desc: 'انجام شده، درحال انجام، برای انجام', icon: CheckCircle2 },
+                    { key: 'description' as const, label: 'شرح و توضیحات', desc: 'خلاصه متن تغییرات و شرح اقدامات', icon: Edit2 },
+                    { key: 'bpmn' as const, label: 'دیاگرام BPMN (مدل‌ساز)', desc: 'دکمه بازکردن ویرایشگر دیاگرام BPMN', icon: Workflow },
+                    { key: 'slideFullscreen' as const, label: 'نمایش اسلاید', desc: 'دکمه مشاهده اسلاید تمام‌صفحه و هاور', icon: Presentation },
+                    { key: 'slideToggle' as const, label: 'اسلایدشو (انتخاب)', desc: 'سوییچ روشن/خاموش در ارائه اسلایدی', icon: SlidersHorizontal },
+                    { key: 'actions' as const, label: 'عملیات (ویرایش و حذف)', desc: 'دکمه‌های اقدام سریع ویرایش و حذف رکورد', icon: Settings },
+                  ].map(col => {
+                    const isVisible = eraVisibility?.columnVisibility
+                      ? eraVisibility.columnVisibility[col.key] !== false
+                      : true;
+                    const IconComp = col.icon;
+                    return (
+                      <div
+                        key={col.key}
+                        className={`p-3.5 rounded-xl border transition flex flex-col justify-between ${
+                          isVisible
+                            ? 'bg-white border-[#DDDBCF] shadow-2xs'
+                            : 'bg-[#F9F9F6] border-[#E8E6DF] opacity-65'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-[#2D2C28] flex items-center gap-1.5 text-xs">
+                              <IconComp className={`h-4 w-4 ${isVisible ? 'text-[#1E40AF]' : 'text-[#8A8880]'}`} />
+                              <span>{col.label}</span>
+                            </span>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isVisible}
+                              onClick={() => onToggleEraColumnVisibility && onToggleEraColumnVisibility(col.key, !isVisible)}
+                              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                isVisible ? 'bg-[#2563EB]' : 'bg-[#CBD5E1]'
+                              }`}
+                            >
+                              <span
+                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                  isVisible ? '-translate-x-4' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <p className="text-[11px] text-[#75746E] mt-1.5 leading-relaxed font-normal">
+                            {col.desc}
+                          </p>
+                        </div>
+                        <div className="text-[10px] font-bold flex items-center gap-1.5 mt-2.5 pt-2 border-t border-[#F0EFEA]">
+                          <span className={`w-2 h-2 rounded-full ${isVisible ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                          <span className={isVisible ? 'text-emerald-700' : 'text-gray-500'}>
+                            {isVisible ? 'در حال نمایش در جدول' : 'مخفی از جدول'}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 

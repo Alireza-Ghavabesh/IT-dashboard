@@ -17,7 +17,16 @@ import {
   extractOrgUnit,
   DEFAULT_EXCLUSION_RULES
 } from './utils/parser';
-import { RawLetterItem, RawEraItem, ProcessedEraItem, CauseRule, ExclusionRule, EraVisibilitySettings } from './types';
+import {
+  RawLetterItem,
+  RawEraItem,
+  ProcessedEraItem,
+  CauseRule,
+  ExclusionRule,
+  EraVisibilitySettings,
+  EraColumnVisibility,
+  DEFAULT_ERA_COLUMN_VISIBILITY
+} from './types';
 import { api, HealthStatus } from './services/api';
 import { CheckCircle2, AlertCircle, Database, RefreshCw, Server, ShieldAlert, Sparkles } from 'lucide-react';
 
@@ -122,7 +131,11 @@ export default function App() {
             autoScrollToTable: parsed.autoScrollToTable ?? false,
             slideHoverPreview: parsed.slideHoverPreview ?? false,
             showAiChartAnalysis: parsed.showAiChartAnalysis ?? false,
-            slideBeforeAfterUnderImage: parsed.slideBeforeAfterUnderImage ?? true
+            slideBeforeAfterUnderImage: parsed.slideBeforeAfterUnderImage ?? true,
+            columnVisibility: {
+              ...DEFAULT_ERA_COLUMN_VISIBILITY,
+              ...(parsed.columnVisibility || {})
+            }
           };
         } catch {}
       }
@@ -134,13 +147,71 @@ export default function App() {
       autoScrollToTable: false,
       slideHoverPreview: false,
       showAiChartAnalysis: false,
-      slideBeforeAfterUnderImage: true
+      slideBeforeAfterUnderImage: true,
+      columnVisibility: { ...DEFAULT_ERA_COLUMN_VISIBILITY }
     };
   });
 
   const handleToggleEraVisibility = (key: keyof EraVisibilitySettings, val: boolean) => {
     setEraVisibility(prev => {
       const next = { ...prev, [key]: val };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('era_visibility_settings', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const handleToggleEraColumnVisibility = (colKey: keyof EraColumnVisibility, val: boolean) => {
+    setEraVisibility(prev => {
+      const currentCols = prev.columnVisibility || DEFAULT_ERA_COLUMN_VISIBILITY;
+      const next: EraVisibilitySettings = {
+        ...prev,
+        columnVisibility: {
+          ...currentCols,
+          [colKey]: val
+        }
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('era_visibility_settings', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const handleSetAllEraColumnsVisibility = (val: boolean) => {
+    setEraVisibility(prev => {
+      const updatedCols: EraColumnVisibility = {
+        index: val,
+        processName: val,
+        entityType: val,
+        orgUnit: val,
+        executionDate: val,
+        operationType: val,
+        status: val,
+        description: val,
+        bpmn: val,
+        slideFullscreen: val,
+        slideToggle: val,
+        actions: val
+      };
+      const next: EraVisibilitySettings = {
+        ...prev,
+        columnVisibility: updatedCols
+      };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('era_visibility_settings', JSON.stringify(next));
+      }
+      return next;
+    });
+  };
+
+  const handleResetEraColumnsVisibility = () => {
+    setEraVisibility(prev => {
+      const next: EraVisibilitySettings = {
+        ...prev,
+        columnVisibility: { ...DEFAULT_ERA_COLUMN_VISIBILITY }
+      };
       if (typeof window !== 'undefined') {
         localStorage.setItem('era_visibility_settings', JSON.stringify(next));
       }
@@ -460,6 +531,7 @@ export default function App() {
       const newRule = await api.createRule({
         keyword: ruleData.keyword || '',
         cause: ruleData.cause || 'نامشخص',
+        targetField: ruleData.targetField || null,
         targetUnit: ruleData.targetUnit || null,
         description: ruleData.description || null,
         color: ruleData.color || '#2563EB',
@@ -468,6 +540,13 @@ export default function App() {
         priority: ruleData.priority || 10
       });
       setRules(prev => [...prev, newRule]);
+      if (newRule.targetUnit && newRule.targetUnit !== 'all' && newRule.targetUnit !== 'همه واحدها') {
+        setUnitCauseVisibility(prev => {
+          const next = { ...prev, [newRule.targetUnit!]: true };
+          api.saveSetting('unit_cause_visibility_config', next).catch(() => {});
+          return next;
+        });
+      }
       showToast(`قانون عامل جدید «${newRule.cause}» ثبت و اعمال گردید.`);
     } catch (err: any) {
       console.error('Error creating rule via REST API:', err);
@@ -476,6 +555,7 @@ export default function App() {
         id: `rule-${Date.now()}`,
         keyword: ruleData.keyword || '',
         cause: ruleData.cause || 'نامشخص',
+        targetField: ruleData.targetField || null,
         targetUnit: ruleData.targetUnit || null,
         description: ruleData.description || null,
         color: ruleData.color || '#2563EB',
@@ -495,6 +575,13 @@ export default function App() {
       setIsSyncing(true);
       const updated = await api.updateRule(id, ruleData);
       setRules(prev => prev.map(r => r.id === id ? updated : r));
+      if (updated.targetUnit && updated.targetUnit !== 'all' && updated.targetUnit !== 'همه واحدها') {
+        setUnitCauseVisibility(prev => {
+          const next = { ...prev, [updated.targetUnit!]: true };
+          api.saveSetting('unit_cause_visibility_config', next).catch(() => {});
+          return next;
+        });
+      }
       showToast(`قانون «${updated.cause}» با موفقیت بروزرسانی شد.`);
     } catch (err: any) {
       console.error('Error updating rule via REST API:', err);
@@ -1013,6 +1100,10 @@ export default function App() {
             filterExecutionMode={filterExecutionMode}
             eraVisibility={eraVisibility}
             onToggleEraVisibility={handleToggleEraVisibility}
+            onToggleEraColumnVisibility={handleToggleEraColumnVisibility}
+            onSetAllEraColumnsVisibility={handleSetAllEraColumnsVisibility}
+            onResetEraColumnsVisibility={handleResetEraColumnsVisibility}
+            onOpenSettingsModal={() => handleOpenSettings('system')}
             onOpenGeneralAiChat={() => setIsAiModalOpen(true)}
           />
         ) : (
@@ -1112,6 +1203,9 @@ export default function App() {
         onToggleFilterExecutionMode={handleToggleFilterExecutionMode}
         eraVisibility={eraVisibility}
         onToggleEraVisibility={handleToggleEraVisibility}
+        onToggleEraColumnVisibility={handleToggleEraColumnVisibility}
+        onSetAllEraColumnsVisibility={handleSetAllEraColumnsVisibility}
+        onResetEraColumnsVisibility={handleResetEraColumnsVisibility}
         onOpenAiModal={() => {
           setIsSettingsModalOpen(false);
           setIsAiModalOpen(true);

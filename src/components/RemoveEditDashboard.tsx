@@ -25,7 +25,8 @@ import {
   parsePersianDate,
   getCurrentJalaliDate,
   getJalaliMonthsAgo,
-  resolveLetterCreatorAndUnit
+  resolveLetterCreatorAndUnit,
+  normalizePersianText
 } from '../utils/parser';
 import {
   Mail,
@@ -227,15 +228,16 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
     debouncedSearchQuery,
     currentPage,
     pageSize,
-    serverTriggerCounter
+    serverTriggerCounter,
+    rules
   ]);
 
-  // Trigger server refetch when raw letters change in parent
+  // Trigger server refetch when raw letters change in parent or rules change
   useEffect(() => {
     if (filterExecutionMode === 'server') {
       setServerTriggerCounter(c => c + 1);
     }
-  }, [letters.length, filterExecutionMode]);
+  }, [letters.length, rules, filterExecutionMode]);
 
   const curJalali = useMemo(() => getCurrentJalaliDate(), []);
 
@@ -313,14 +315,23 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
   // Determine if Cause column should be shown in the table for current filter (only for selected units)
   const isCauseColumnVisible = useMemo(() => {
     if (selectedUnits.length === 1) {
-      return unitCauseVisibility[selectedUnits[0]] === true;
+      const u = selectedUnits[0];
+      const hasRuleForUnit = rules.some(r => r.isActive !== false && r.targetUnit && normalizePersianText(r.targetUnit) === normalizePersianText(u));
+      if (hasRuleForUnit) return true;
+      if (unitCauseVisibility[u] !== undefined) {
+        return unitCauseVisibility[u] === true;
+      }
+      return true;
     }
     if (selectedUnits.length > 1) {
-      return selectedUnits.some(u => unitCauseVisibility[u] === true);
+      return selectedUnits.some(u => {
+        const hasRuleForUnit = rules.some(r => r.isActive !== false && r.targetUnit && normalizePersianText(r.targetUnit) === normalizePersianText(u));
+        return hasRuleForUnit || unitCauseVisibility[u] !== false;
+      });
     }
-    // For 'all' units view: show if explicitly enabled for 'all' or if any specific unit is enabled
-    return unitCauseVisibility['all'] === true || Object.entries(unitCauseVisibility).some(([k, v]) => k !== 'all' && v === true);
-  }, [selectedUnits, unitCauseVisibility]);
+    // For 'all' units view: show if explicitly enabled for 'all' or if any rule exists or not explicitly disabled
+    return true;
+  }, [selectedUnits, unitCauseVisibility, rules]);
 
   // Excluded letters count in dataset
   const excludedLettersCount = useMemo(() => {
@@ -344,11 +355,33 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
     return map;
   }, [letters]);
 
-  // Distinct causes list
+  // Distinct causes list (including causes from active defined rules + causes present in letters)
   const allCauses = useMemo(() => {
-    const causes = Array.from(new Set(letters.filter(l => !l.isExcluded).map(l => l.cause || 'نامشخص').filter(Boolean)));
+    const causesSet = new Set<string>();
+
+    // 1. Add all causes from active rules
+    rules.filter(r => r.isActive !== false).forEach(r => {
+      if (r.cause && r.cause.trim()) {
+        causesSet.add(r.cause.trim());
+      }
+    });
+
+    // 2. Add all causes present in current letters dataset
+    letters.filter(l => !l.isExcluded).forEach(l => {
+      if (l.cause && l.cause.trim() && l.cause !== 'نامشخص') {
+        causesSet.add(l.cause.trim());
+      }
+    });
+
+    // 3. Always ensure 'نامشخص' is included if any letter has no cause
+    const hasUnclassified = letters.some(l => !l.isExcluded && (!l.cause || l.cause === 'نامشخص'));
+    if (hasUnclassified) {
+      causesSet.add('نامشخص');
+    }
+
+    const causes = Array.from(causesSet);
     return causes.sort((a, b) => (a === 'بانکی' ? -1 : b === 'بانکی' ? 1 : a.localeCompare(b, 'fa')));
-  }, [letters]);
+  }, [letters, rules]);
 
   // Custom rotated tick for BarChart XAxis to cleanly place labels comfortably below the chart bars
   const renderRotatedUnitTick = (props: any) => {

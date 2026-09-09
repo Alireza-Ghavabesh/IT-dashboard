@@ -68,7 +68,7 @@ export async function seedDatabase(force = false) {
         key: 'unit_cause_visibility_config',
         value: JSON.stringify({
           'حسابداری مالی': true,
-          'فروش': false,
+          'فروش': true,
           'all': true
         })
       }

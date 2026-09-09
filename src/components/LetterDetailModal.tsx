@@ -162,11 +162,11 @@ export const LetterDetailModal: React.FC<LetterDetailModalProps> = ({ letter, on
             </div>
           )}
 
-          {letter.raw.یادداشت && (
+          {(letter.note || letter.raw?.یادداشت || letter.raw?.['یادداشت نامه']) && (
             <div className="space-y-1">
               <span className="font-semibold text-[#8A6224]">یادداشت ثبت شده:</span>
               <div className="p-3 bg-[#FAF6EC] text-[#8A6224] border border-[#EADBBD] rounded-xl leading-relaxed">
-                {letter.raw.یادداشت}
+                {letter.note || letter.raw?.یادداشت || letter.raw?.['یادداشت نامه']}
               </div>
             </div>
           )}

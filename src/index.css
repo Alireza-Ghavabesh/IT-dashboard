@@ -187,17 +187,24 @@ jdp-container .jdp-icon-minus {
   background-size: 20px 20px;
 }
 
-/* Completely hide bpmn.io branding and logo watermark */
+/* Completely hide bpmn.io branding, logo watermark, links and attribution in all modes */
 .bjs-powered-by,
 a.bjs-powered-by,
 .djs-container .bjs-powered-by,
-.bpmn-canvas .bjs-powered-by {
+.bpmn-canvas .bjs-powered-by,
+a[href*="bpmn.io"],
+.bjs-container a[href*="bpmn.io"],
+.djs-container a[href*="bpmn.io"],
+[class*="bjs-powered-by"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
   width: 0 !important;
   height: 0 !important;
+  position: absolute !important;
+  clip: rect(0, 0, 0, 0) !important;
+  overflow: hidden !important;
 }
 
 

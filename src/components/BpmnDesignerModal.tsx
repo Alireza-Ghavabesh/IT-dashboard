@@ -57,6 +57,12 @@ const COLOR_PALETTE = [
   { label: 'سفید کلاسیک', stroke: '#1e293b', fill: '#ffffff', dot: 'bg-white border border-slate-400' },
 ];
 
+function removeBpmnWatermark(container: HTMLElement | null) {
+  if (!container) return;
+  const logos = container.querySelectorAll('.bjs-powered-by, a.bjs-powered-by, a[href*="bpmn.io"], [class*="bjs-powered-by"]');
+  logos.forEach(el => el.remove());
+}
+
 /**
  * Scans the diagram canvas SVG and ensures all connection/sequence-flow labels
  * (and any external diagram labels) have an opaque, rounded Microsoft Visio-style
@@ -67,6 +73,7 @@ const COLOR_PALETTE = [
  */
 function applyVisioLabelBadges(container: HTMLElement | null) {
   if (!container) return;
+  removeBpmnWatermark(container);
 
   // Select all BPMN label text elements and connection labels in the canvas SVG
   const textElements = container.querySelectorAll<SVGTextElement>(
@@ -756,15 +763,15 @@ g[data-element-id*="Flow"] tspan {
         className={
           isFullscreen
             ? 'w-full h-full flex flex-col relative bg-white'
-            : 'bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-[#DDDBCF] flex flex-col overflow-hidden w-[96vw] max-w-7xl h-[92vh] relative'
+            : 'bg-white rounded-2xl shadow-2xl border border-[#DDDBCF] flex flex-col overflow-hidden w-[98vw] max-w-[1600px] h-[95vh] relative'
         }
       >
         {/* Top Header Bar (Only visible in Windowed Popup Mode) */}
         {!isFullscreen && (
-          <div className="bg-[#FAFAF7] border-b border-[#DDDBCF] px-4 py-2.5 sm:px-6 flex items-center justify-between gap-3 shrink-0">
+          <div className="bg-[#FAFAF7] border-b border-[#DDDBCF] px-4 py-2 sm:px-6 flex items-center justify-between gap-3 shrink-0">
             {/* Title & Info */}
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-[#545D4B] text-white flex items-center justify-center shadow-2xs shrink-0">
+              <div className="w-7 h-7 rounded-xl bg-[#545D4B] text-white flex items-center justify-center shadow-2xs shrink-0">
                 <Workflow className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex items-center gap-2 flex-wrap">
@@ -809,19 +816,6 @@ g[data-element-id*="Flow"] tspan {
                 <span>بستن</span>
               </button>
             </div>
-          </div>
-        )}
-
-        {/* Fullscreen Floating Title (Minimal & Non-intrusive) */}
-        {isFullscreen && (
-          <div className="absolute top-3 right-4 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-xl text-xs font-black text-[#2D2C28] shadow-sm border border-[#DDDBCF] pointer-events-none z-20 flex items-center gap-2">
-            <Workflow className="h-3.5 w-3.5 text-[#545D4B]" />
-            <span>{item.processName}</span>
-            {item.orgUnit && (
-              <span className="text-[10px] text-[#75746E] bg-[#EFEFEA] px-1.5 py-0.5 rounded-md font-bold">
-                {item.orgUnit}
-              </span>
-            )}
           </div>
         )}
 

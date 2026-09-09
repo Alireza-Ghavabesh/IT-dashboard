@@ -71,6 +71,7 @@ model CauseRule {
   cause       String   // e.g. "بانکی"
   targetUnit  String?  // e.g. "حسابداری مالی" or null/"all"
   matchType   String   @default("contains") // "contains", "exact", "startsWith"
+  targetField String?  @default("all") // Dynamic field/column from Excel e.g. "یادداشت", "موضوع", "all", etc.
   isActive    Boolean  @default(true)
   color       String?  @default("#2563EB")
   description String?

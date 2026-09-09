@@ -88,6 +88,7 @@ export interface CauseRule {
   cause: string;
   targetUnit?: string | null;
   matchType?: 'contains' | 'exact' | 'startsWith';
+  targetField?: string | null; // e.g. 'all' | 'یادداشت' | 'موضوع' | 'شرح' | any Excel column key
   isActive?: boolean;
   color?: string | null;
   description?: string | null;
@@ -135,6 +136,7 @@ export interface ProcessedLetter {
   status?: string | null;
   urgency?: string | null;
   isReferral?: boolean;
+  note?: string | null;
 }
 
 export interface RawEraItem {
@@ -238,6 +240,36 @@ export interface AiDebugInfo {
   };
 }
 
+export interface EraColumnVisibility {
+  index: boolean;           // # شماره ردیف
+  processName: boolean;     // نام فرآیند / موجودیت
+  entityType: boolean;      // نوع
+  orgUnit: boolean;         // واحد سازمانی
+  executionDate: boolean;   // تاریخ انجام
+  operationType: boolean;   // نوع عملیات
+  status: boolean;          // وضعیت
+  description: boolean;     // توضیحات و شرح تغییرات
+  bpmn: boolean;            // دیاگرام BPMN
+  slideFullscreen: boolean; // نمایش اسلاید
+  slideToggle: boolean;     // اسلایدشو
+  actions: boolean;         // عملیات
+}
+
+export const DEFAULT_ERA_COLUMN_VISIBILITY: EraColumnVisibility = {
+  index: true,
+  processName: true,
+  entityType: true,
+  orgUnit: true,
+  executionDate: true,
+  operationType: true,
+  status: true,
+  description: true,
+  bpmn: true,
+  slideFullscreen: true,
+  slideToggle: true,
+  actions: true,
+};
+
 export interface EraVisibilitySettings {
   showHeader: boolean;        // باکس ۱: هدر اصلی و عنوان ERA و دکمه‌های ارائه
   showMetrics: boolean;       // باکس ۲: کارت‌های آماری ۴گانه (متریک‌ها)
@@ -246,5 +278,6 @@ export interface EraVisibilitySettings {
   slideHoverPreview: boolean; // نمایش پاپ‌آپ اسلاید هنگام رفتن ماوس روی دکمه نمایش اسلاید (۸۰٪ صفحه)
   showAiChartAnalysis?: boolean; // نمایش دکمه تحلیل هوش مصنوعی از موثرترین کارها در هدر نمودار میله‌ای (پیش‌فرض: غیرفعال)
   slideBeforeAfterUnderImage?: boolean; // نمایش متن وضعیت قبل و بعد زیر عکس‌ها (پیش‌فرض: فعال / true) یا در تب جداگانه (false)
+  columnVisibility?: EraColumnVisibility; // کنترل پویای نمایش یا عدم نمایش تک‌تک ستون‌های جدول فرآیندها
 }
 

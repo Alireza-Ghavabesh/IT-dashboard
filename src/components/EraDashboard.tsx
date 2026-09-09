@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { ProcessedEraItem, EraVisibilitySettings } from '../types';
+import { ProcessedEraItem, EraVisibilitySettings, EraColumnVisibility } from '../types';
 import { MetricCard } from './MetricCard';
 import { EraFormModal } from './EraFormModal';
 import { ProcessPresentationModal } from './ProcessPresentationModal';
@@ -75,6 +75,10 @@ interface EraDashboardProps {
   filterExecutionMode?: 'client' | 'server';
   eraVisibility?: EraVisibilitySettings;
   onToggleEraVisibility?: (key: keyof EraVisibilitySettings, val: boolean) => void;
+  onToggleEraColumnVisibility?: (colKey: keyof EraColumnVisibility, val: boolean) => void;
+  onSetAllEraColumnsVisibility?: (val: boolean) => void;
+  onResetEraColumnsVisibility?: () => void;
+  onOpenSettingsModal?: () => void;
   onOpenGeneralAiChat?: (initialQuestion?: string) => void;
 }
 
@@ -92,8 +96,34 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   filterExecutionMode = 'server',
   eraVisibility = { showHeader: false, showMetrics: false, showEntityChips: false, autoScrollToTable: false, slideBeforeAfterUnderImage: true },
   onToggleEraVisibility,
+  onToggleEraColumnVisibility,
+  onSetAllEraColumnsVisibility,
+  onResetEraColumnsVisibility,
+  onOpenSettingsModal,
   onOpenGeneralAiChat
 }) => {
+  const isColVisible = (colKey: keyof EraColumnVisibility) => {
+    if (!eraVisibility?.columnVisibility) return true;
+    return eraVisibility.columnVisibility[colKey] !== false;
+  };
+
+  const visibleColCount = useMemo(() => {
+    const allKeys: (keyof EraColumnVisibility)[] = [
+      'index',
+      'processName',
+      'entityType',
+      'orgUnit',
+      'executionDate',
+      'operationType',
+      'status',
+      'description',
+      'bpmn',
+      'slideFullscreen',
+      'slideToggle',
+      'actions'
+    ];
+    return allKeys.filter(k => isColVisible(k)).length;
+  }, [eraVisibility?.columnVisibility]);
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedOpType, setSelectedOpType] = useState<string>('all');
   const [selectedEntityType, setSelectedEntityType] = useState<string>('all');
@@ -1923,6 +1953,17 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 <span>حذف تمام فیلترها</span>
               </button>
             )}
+            {onOpenSettingsModal && (
+              <button
+                type="button"
+                onClick={onOpenSettingsModal}
+                className="flex items-center gap-1 text-xs text-[#545D4B] hover:text-[#2D2C28] font-bold px-2.5 py-1.5 rounded-xl bg-white border border-[#DDDBCF] hover:bg-[#EFEFEA] transition cursor-pointer shadow-2xs"
+                title="مدیریت نمایش/عدم نمایش ستون‌های جدول فرآیندها"
+              >
+                <Sliders className="h-3.5 w-3.5 text-[#545D4B]" />
+                <span>تنظیم ستون‌ها</span>
+              </button>
+            )}
             <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-xl border border-blue-200">
               {formatNumber(slideSelectedCount)} اسلاید آماده ارائه
             </span>
@@ -1947,110 +1988,143 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
             <thead>
               {/* Row 1: Column Titles */}
               <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF]">
-                <th className="py-2.5 px-2 w-10 min-w-[38px] text-center text-[11px]">#</th>
-                <th className="py-2.5 px-3 min-w-[200px] text-right text-xs">نام فرآیند / موجودیت</th>
-                <th className="py-2.5 px-2 min-w-[70px] text-center text-xs">نوع</th>
-                <th className="py-2.5 px-3 min-w-[130px] text-right text-xs">واحد سازمانی</th>
-                <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">
-                  <div className="flex items-center justify-center gap-1">
-                    <span>تاریخ انجام</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempStartDate(startDate);
-                        setTempEndDate(endDate);
-                        setIsDateFilterOpen(prev => !prev);
-                      }}
-                      className={`p-0.5 rounded transition cursor-pointer ${
-                        startDate || endDate
-                          ? 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 ring-1 ring-emerald-400'
-                          : 'text-[#8A8880] hover:text-[#2D2C28] hover:bg-[#DDDBCF]'
-                      }`}
-                      title="فیلتر محدوده زمانی تاریخ"
-                    >
-                      <Calendar className="h-3 w-3" />
-                    </button>
-                  </div>
-                </th>
-                <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">نوع عملیات</th>
-                <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">وضعیت</th>
-                <th className="py-2.5 px-3 min-w-[220px] max-w-[320px] text-right text-xs">توضیحات و شرح تغییرات</th>
-                <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">
-                  <div className="flex items-center justify-center gap-1" title="طراحی و مدل‌سازی فرآیند با bpmn.js استاندارد BPMN 2.0">
-                    <Workflow className="h-3.5 w-3.5 text-[#545D4B]" />
-                    <span>دیاگرام BPMN</span>
-                  </div>
-                </th>
-                <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">نمایش اسلاید</th>
-                <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">اسلایدشو</th>
-                <th className="py-2.5 px-2 min-w-[65px] text-center text-xs">عملیات</th>
+                {isColVisible('index') && (
+                  <th className="py-2.5 px-2 w-10 min-w-[38px] text-center text-[11px]">#</th>
+                )}
+                {isColVisible('processName') && (
+                  <th className="py-2.5 px-3 min-w-[190px] text-right text-xs">نام فرآیند / موجودیت</th>
+                )}
+                {isColVisible('entityType') && (
+                  <th className="py-2.5 px-2 min-w-[70px] text-center text-xs">نوع</th>
+                )}
+                {isColVisible('orgUnit') && (
+                  <th className="py-2.5 px-3 min-w-[130px] text-right text-xs">واحد سازمانی</th>
+                )}
+                {isColVisible('executionDate') && (
+                  <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">
+                    <div className="flex items-center justify-center gap-1">
+                      <span>تاریخ انجام</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTempStartDate(startDate);
+                          setTempEndDate(endDate);
+                          setIsDateFilterOpen(prev => !prev);
+                        }}
+                        className={`p-0.5 rounded transition cursor-pointer ${
+                          startDate || endDate
+                            ? 'text-emerald-700 bg-emerald-100 hover:bg-emerald-200 ring-1 ring-emerald-400'
+                            : 'text-[#8A8880] hover:text-[#2D2C28] hover:bg-[#DDDBCF]'
+                        }`}
+                        title="فیلتر محدوده زمانی تاریخ"
+                      >
+                        <Calendar className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </th>
+                )}
+                {isColVisible('operationType') && (
+                  <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">نوع اقدام</th>
+                )}
+                {isColVisible('status') && (
+                  <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">وضعیت</th>
+                )}
+                {isColVisible('description') && (
+                  <th className="py-2.5 px-3 min-w-[200px] text-right text-xs">توضیحات و شرح</th>
+                )}
+                {isColVisible('bpmn') && (
+                  <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">
+                    <div className="flex items-center justify-center gap-1" title="طراحی و مدل‌سازی فرآیند با bpmn.js استاندارد BPMN 2.0">
+                      <Workflow className="h-3.5 w-3.5 text-[#545D4B]" />
+                      <span>دیاگرام BPMN</span>
+                    </div>
+                  </th>
+                )}
+                {isColVisible('slideFullscreen') && (
+                  <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">نمایش اسلاید</th>
+                )}
+                {isColVisible('slideToggle') && (
+                  <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">اسلایدشو</th>
+                )}
+                {isColVisible('actions') && (
+                  <th className="py-2.5 px-2 min-w-[65px] text-center text-xs">عملیات</th>
+                )}
               </tr>
 
               {/* Row 2: Per-column Filter Inputs Aligned Directly Above/Below Each Column Header */}
               <tr className="bg-[#F5F5F0] border-b border-[#DDDBCF] text-xs">
                 {/* 1. # Index */}
-                <th className="p-1 text-center font-normal">
-                  <div className="flex items-center justify-center" title="فیلترهای اختصاصی هر ستون">
-                    <SlidersHorizontal className="h-3 w-3 text-[#8A8880]" />
-                  </div>
-                </th>
+                {isColVisible('index') && (
+                  <th className="p-1 text-center font-normal">
+                    <div className="flex items-center justify-center" title="فیلترهای اختصاصی هر ستون">
+                      <SlidersHorizontal className="h-3 w-3 text-[#8A8880]" />
+                    </div>
+                  </th>
+                )}
 
                 {/* 2. Process Name Filter (Search) */}
-                <th className="p-1 font-normal">
-                  <div className="relative">
-                    <Search className="absolute right-1.5 top-1.5 h-3 w-3 text-[#8A8880]" />
-                    <input
-                      type="text"
-                      placeholder="جستجو..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full bg-white border border-[#DDDBCF] rounded-lg pr-5 pl-5 py-0.5 text-[11px] text-[#2D2C28] placeholder-[#8A8880] focus:outline-none focus:ring-1 focus:ring-[#545D4B]"
-                    />
-                    {searchQuery && (
-                      <button
-                        type="button"
-                        onClick={() => setSearchQuery('')}
-                        className="absolute left-1 top-1 text-[#8A8880] hover:text-[#2D2C28]"
-                        title="پاک کردن جستجو"
-                      >
-                        <X className="h-2.5 w-2.5" />
-                      </button>
-                    )}
-                  </div>
-                </th>
+                {isColVisible('processName') && (
+                  <th className="p-1 font-normal">
+                    <div className="relative">
+                      <Search className="absolute right-1.5 top-1.5 h-3 w-3 text-[#8A8880]" />
+                      <input
+                        type="text"
+                        placeholder="جستجو..."
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full bg-white border border-[#DDDBCF] rounded-lg pr-5 pl-5 py-0.5 text-[11px] text-[#2D2C28] placeholder-[#8A8880] focus:outline-none focus:ring-1 focus:ring-[#545D4B]"
+                      />
+                      {searchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSearchQuery('')}
+                          className="absolute left-1 top-1 text-[#8A8880] hover:text-[#2D2C28]"
+                          title="پاک کردن جستجو"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      )}
+                    </div>
+                  </th>
+                )}
 
                 {/* 3. Entity Type Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={selectedEntityType}
-                    onChange={e => setSelectedEntityType(e.target.value)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                  >
-                    <option value="all">همه</option>
-                    <option value="فرآیند">فرآیند ({processesEntityCount})</option>
-                    <option value="فرم">فرم ({formsEntityCount})</option>
-                    <option value="گزارش">گزارش ({reportsEntityCount})</option>
-                  </select>
-                </th>
+                {isColVisible('entityType') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={selectedEntityType}
+                      onChange={e => setSelectedEntityType(e.target.value)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    >
+                      <option value="all">همه</option>
+                      <option value="فرآیند">فرآیند ({processesEntityCount})</option>
+                      <option value="فرم">فرم ({formsEntityCount})</option>
+                      <option value="گزارش">گزارش ({reportsEntityCount})</option>
+                    </select>
+                  </th>
+                )}
 
                 {/* 4. Org Unit Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={selectedUnit}
-                    onChange={e => setSelectedUnit(e.target.value)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                  >
-                    <option value="all">همه واحدها</option>
-                    {allUnits.map(unit => (
-                      <option key={unit} value={unit}>
-                        {unit} ({unitCountsMap[unit] || 0})
-                      </option>
-                    ))}
-                  </select>
-                </th>
+                {isColVisible('orgUnit') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={selectedUnit}
+                      onChange={e => setSelectedUnit(e.target.value)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    >
+                      <option value="all">همه واحدها</option>
+                      {allUnits.map(unit => (
+                        <option key={unit} value={unit}>
+                          {unit} ({unitCountsMap[unit] || 0})
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                )}
 
                 {/* 5. Date Range Filter Trigger & Popover */}
-                <th className="p-1 font-normal text-center relative" ref={dateFilterRef}>
+                {isColVisible('executionDate') && (
+                  <th className="p-1 font-normal text-center relative" ref={dateFilterRef}>
                   {startDate || endDate ? (
                     <div className="inline-flex items-center justify-between gap-0.5 w-full bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg px-1 py-0.5 text-[9px] font-bold shadow-2xs">
                       <button
@@ -2322,89 +2396,104 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                     </div>
                   )}
                 </th>
+                )}
 
                 {/* 6. Operation Type Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={selectedOpType}
-                    onChange={e => setSelectedOpType(e.target.value)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                  >
-                    <option value="all">همه</option>
-                    <option value="جدید">جدید ({newFormsCount})</option>
-                    <option value="اصلاح">اصلاح ({modifiedFormsCount})</option>
-                    <option value="اتوماتیک‌سازی">اتوماتیک‌سازی ({automationFormsCount})</option>
-                  </select>
-                </th>
+                {isColVisible('operationType') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={selectedOpType}
+                      onChange={e => setSelectedOpType(e.target.value)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    >
+                      <option value="all">همه</option>
+                      <option value="جدید">جدید ({newFormsCount})</option>
+                      <option value="اصلاح">اصلاح ({modifiedFormsCount})</option>
+                      <option value="اتوماتیک‌سازی">اتوماتیک‌سازی ({automationFormsCount})</option>
+                    </select>
+                  </th>
+                )}
 
                 {/* 7. Status Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={selectedStatus}
-                    onChange={e => setSelectedStatus(e.target.value)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                    title="فیلتر وضعیت فرآیند"
-                  >
-                    <option value="all">همه وضعیت‌ها</option>
-                    <option value="برای انجام">برای انجام ({todoCount})</option>
-                    <option value="درحال انجام">درحال انجام ({inProgressCount})</option>
-                    <option value="انجام شده">انجام شده ({doneCount})</option>
-                  </select>
-                </th>
+                {isColVisible('status') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={selectedStatus}
+                      onChange={e => setSelectedStatus(e.target.value)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                      title="فیلتر وضعیت فرآیند"
+                    >
+                      <option value="all">همه وضعیت‌ها</option>
+                      <option value="برای انجام">برای انجام ({todoCount})</option>
+                      <option value="درحال انجام">درحال انجام ({inProgressCount})</option>
+                      <option value="انجام شده">انجام شده ({doneCount})</option>
+                    </select>
+                  </th>
+                )}
 
                 {/* 8. Description Placeholder */}
-                <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
-                  —
-                </th>
+                {isColVisible('description') && (
+                  <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
+                    —
+                  </th>
+                )}
 
-                {/* 8. BPMN Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={bpmnFilter}
-                    onChange={e => setBpmnFilter(e.target.value as any)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                    title="فیلتر بر اساس داشتن دیاگرام BPMN"
-                  >
-                    <option value="all">همه</option>
-                    <option value="with-bpmn">دارای BPMN ({withBpmnCount})</option>
-                    <option value="without-bpmn">بدون BPMN ({withoutBpmnCount})</option>
-                  </select>
-                </th>
-
-                {/* 9. Slide Single View Column Placeholder */}
-                <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
-                  —
-                </th>
-
-                {/* 10. Slide Batch Filter */}
-                <th className="p-1 font-normal">
-                  <select
-                    value={slideFilter}
-                    onChange={e => setSlideFilter(e.target.value as any)}
-                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
-                  >
-                    <option value="all">همه</option>
-                    <option value="selected">منتخب ({slideSelectedCount})</option>
-                    <option value="unselected">خاموش ({eraItems.length - slideSelectedCount})</option>
-                  </select>
-                </th>
-
-                {/* 10. Reset Filter Action */}
-                <th className="p-1 text-center font-normal">
-                  {activeFiltersCount > 0 ? (
-                    <button
-                      type="button"
-                      onClick={handleResetAllFilters}
-                      className="inline-flex items-center justify-center gap-0.5 px-1 py-0.5 rounded-lg text-[9px] font-bold text-[#9C3A27] bg-[#FAECE8] hover:bg-[#F5D8D0] transition cursor-pointer border border-[#E8B4A8]"
-                      title="حذف تمام فیلترها"
+                {/* 9. BPMN Filter */}
+                {isColVisible('bpmn') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={bpmnFilter}
+                      onChange={e => setBpmnFilter(e.target.value as any)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                      title="فیلتر بر اساس داشتن دیاگرام BPMN"
                     >
-                      <RotateCcw className="h-2.5 w-2.5" />
-                      <span>ریست</span>
-                    </button>
-                  ) : (
-                    <span className="text-[#8A8880] text-[10px]">—</span>
-                  )}
-                </th>
+                      <option value="all">همه</option>
+                      <option value="with-bpmn">دارای BPMN ({withBpmnCount})</option>
+                      <option value="without-bpmn">بدون BPMN ({withoutBpmnCount})</option>
+                    </select>
+                  </th>
+                )}
+
+                {/* 10. Slide Single View Column Placeholder */}
+                {isColVisible('slideFullscreen') && (
+                  <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
+                    —
+                  </th>
+                )}
+
+                {/* 11. Slide Batch Filter */}
+                {isColVisible('slideToggle') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={slideFilter}
+                      onChange={e => setSlideFilter(e.target.value as any)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    >
+                      <option value="all">همه</option>
+                      <option value="selected">منتخب ({slideSelectedCount})</option>
+                      <option value="unselected">خاموش ({eraItems.length - slideSelectedCount})</option>
+                    </select>
+                  </th>
+                )}
+
+                {/* 12. Reset Filter Action */}
+                {isColVisible('actions') && (
+                  <th className="p-1 text-center font-normal">
+                    {activeFiltersCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleResetAllFilters}
+                        className="inline-flex items-center justify-center gap-0.5 px-1 py-0.5 rounded-lg text-[9px] font-bold text-[#9C3A27] bg-[#FAECE8] hover:bg-[#F5D8D0] transition cursor-pointer border border-[#E8B4A8]"
+                        title="حذف تمام فیلترها"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        <span>ریست</span>
+                      </button>
+                    ) : (
+                      <span className="text-[#8A8880] text-[10px]">—</span>
+                    )}
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E6DF]">
@@ -2413,7 +2502,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 : (filterExecutionMode === 'server' ? serverItems : filteredItems)
               ).length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-[#8A8880] font-medium">
+                  <td colSpan={visibleColCount || 1} className="py-8 text-center text-[#8A8880] font-medium">
                     {serverLoading ? 'در حال جستجو و دریافت اطلاعات...' : 'موردی یافت نشد.'}
                   </td>
                 </tr>
@@ -2438,208 +2527,242 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
                   return (
                     <tr key={`era-row-${item.id || idx}-${idx}`} className="hover:bg-[#F5F5F0] transition-colors group">
-                      <td className="py-2.5 px-2 text-center text-[#8A8880] font-mono text-[11px]">
-                        {rowNumber}
-                      </td>
-                      <td 
-                        className="py-2.5 px-3 font-bold text-[#2D2C28] text-xs cursor-pointer hover:text-[#545D4B] transition-colors"
-                        onClick={() => handleOpenEdit(item)}
-                        title={`مشاهده و ویرایش فرآیند: ${item.processName}`}
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5 break-words">
-                          <span className="hover:underline">{item.processName}</span>
-                          {hasImage && (
-                            <span 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenPresentation(item);
-                              }}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-normal hover:bg-blue-100 transition cursor-pointer whitespace-nowrap"
-                              title="این فرآیند دارای تصویر اسکرین‌شات پیوست است"
-                            >
-                              <ImageIcon className="h-2.5 w-2.5 text-blue-600" />
-                              <span>تصویر پیوست</span>
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      
-                      {/* Entity Type Badge */}
-                      <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
-                          entity === 'فرم'
-                            ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                            : entity === 'گزارش'
-                            ? 'bg-amber-100 text-amber-900 border border-amber-200'
-                            : 'bg-blue-100 text-blue-800 border border-blue-200'
-                        }`}>
-                          {entity}
-                        </span>
-                      </td>
+                      {/* 1. Row Index */}
+                      {isColVisible('index') && (
+                        <td className="py-2.5 px-2 text-center text-[#8A8880] font-mono text-[11px]">
+                          {rowNumber}
+                        </td>
+                      )}
 
-                      <td className="py-2.5 px-3">
-                        <span className="bg-[#EFEFEA] text-[#2D2C28] font-semibold px-2 py-0.5 rounded-md border border-[#DDDBCF] text-[11px] block truncate" title={item.orgUnit}>
-                          {item.orgUnit}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-2 text-center font-mono text-[#5A5852] text-[11px] whitespace-nowrap">
-                        {item.executionDate}
-                      </td>
-                      <td className="py-2.5 px-2 text-center">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
-                          isAuto
-                            ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                            : isNew
-                            ? 'bg-[#EDF2EB] text-[#2E462C] border border-[#D4DFD1]'
-                            : 'bg-[#FDF6F0] text-[#7C3E1D] border border-[#E8D5C4]'
-                        }`}>
-                          {item.operationType}
-                        </span>
-                      </td>
-
-                      {/* Status Column with quick switch dropdown */}
-                      <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
-                        <div className="relative inline-block text-center">
-                          <select
-                            value={itemStatus}
-                            onChange={(e) => handleQuickStatusChange(item, e.target.value as any, e)}
-                            className={`appearance-none px-2.5 py-0.5 pr-5 pl-2 text-[10px] font-bold rounded-full border cursor-pointer transition shadow-2xs focus:outline-none focus:ring-1 focus:ring-offset-1 text-center ${
-                              itemStatus === 'برای انجام'
-                                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 focus:ring-amber-500'
-                                : itemStatus === 'درحال انجام'
-                                ? 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100 focus:ring-blue-500'
-                                : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 focus:ring-emerald-500'
-                            }`}
-                            title="تغییر سریع وضعیت فرآیند (برای انجام / درحال انجام / انجام شده)"
-                          >
-                            <option value="برای انجام">برای انجام</option>
-                            <option value="درحال انجام">درحال انجام</option>
-                            <option value="انجام شده">انجام شده</option>
-                          </select>
-                          <ChevronDown className="w-2.5 h-2.5 absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
-                        </div>
-                      </td>
-
-                      {/* Truncated Description Column with ellipsis, click opens full details */}
-                      <td className="py-2.5 px-3 text-[#5A5852] font-medium text-[11px] max-w-[280px]">
-                        <div
-                          className="line-clamp-1 truncate cursor-pointer hover:text-[#2D2C28] hover:bg-[#EFEFEA]/70 px-1.5 py-0.5 rounded transition-all"
+                      {/* 2. Process / Entity Name */}
+                      {isColVisible('processName') && (
+                        <td 
+                          className="py-2.5 px-3 font-bold text-[#2D2C28] text-xs cursor-pointer hover:text-[#545D4B] transition-colors"
                           onClick={() => handleOpenEdit(item)}
-                          title={`کلیک برای مشاهده متن کامل توضیحات:\n${item.description || 'بدون توضیحات'}`}
+                          title={`مشاهده و ویرایش فرآیند: ${item.processName}`}
                         >
-                          {item.description ? (
-                            <span className="truncate block">{item.description}</span>
-                          ) : (
-                            <span className="text-[#8A8880] italic text-[10px]">—</span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* BPMN Designer Column */}
-                      <td className="py-2.5 px-2 text-center">
-                        {item.bpmnXml || item.hasBpmn ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveBpmnItem(item);
-                              setIsBpmnModalOpen(true);
-                            }}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
-                            title={`این فرآیند دارای دیاگرام BPMN است. کلیک جهت مشاهده یا ویرایش در bpmn.js`}
-                          >
-                            <Workflow className="h-3 w-3 text-emerald-600 group-hover/bpmnbtn:text-white transition-transform group-hover/bpmnbtn:scale-110" />
-                            <span>ویرایش BPMN</span>
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover/bpmnbtn:bg-white" />
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setActiveBpmnItem(item);
-                              setIsBpmnModalOpen(true);
-                            }}
-                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#545D4B]/5 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/20 hover:border-[#545D4B] text-[10px] font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
-                            title={`طراحی دیاگرام استاندارد BPMN 2.0 برای فرآیند "${item.processName}" با ابزار bpmn.js`}
-                          >
-                            <Workflow className="h-2.5 w-2.5 text-[#545D4B] group-hover/bpmnbtn:text-white" />
-                            <span>+ طراحی BPMN</span>
-                          </button>
-                        )}
-                      </td>
-
-                      {/* NEW COLUMN: Show Slide in Fullscreen */}
-                      <td className="py-2.5 px-2 text-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setHoveredSlideItem(null);
-                            setViewingFullscreenSlideItem(item);
-                          }}
-                          onMouseEnter={() => handleSlideButtonMouseEnter(item)}
-                          onMouseLeave={handleSlideButtonMouseLeave}
-                          className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-[#545D4B]/10 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/25 hover:border-[#545D4B] text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/slidebtn whitespace-nowrap"
-                          title={isSlideHoverPreviewEnabled ? `هاور ماوس: پیش‌نمایش سریع (۸۰٪ صفحه) | کلیک: نمایش تمام‌صفحه فرآیند "${item.processName}"` : `نمایش اسلاید تمام‌صفحه فرآیند "${item.processName}"`}
-                        >
-                          <Presentation className="h-3 w-3 group-hover/slidebtn:scale-110 transition-transform text-[#545D4B] group-hover/slidebtn:text-white" />
-                          <span>نمایش اسلاید</span>
-                        </button>
-                      </td>
-
-                      {/* SWITCH: Slide Presentation Switch Toggle */}
-                      <td className="py-2.5 px-2 text-center">
-                        <div className="inline-flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            role="switch"
-                            aria-checked={isSelectedForSlide}
-                            onClick={(e) => {
-                              handleToggleSlide(item, e);
-                            }}
-                            className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
-                              isSelectedForSlide ? 'bg-blue-600' : 'bg-slate-300'
-                            }`}
-                            title={isSelectedForSlide ? 'اسلاید فعال است' : 'اسلاید خاموش است'}
-                          >
-                            <span className="sr-only">سوییچ نمایش اسلایدی</span>
-                            <span
-                              aria-hidden="true"
-                              className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
-                                isSelectedForSlide ? '-translate-x-3.5' : 'translate-x-0'
-                              }`}
-                            />
-                          </button>
-                          <span className={`text-[10px] font-bold min-w-[28px] text-right ${isSelectedForSlide ? 'text-blue-700' : 'text-[#8A8880]'}`}>
-                            {isSelectedForSlide ? 'فعال' : 'خاموش'}
+                          <div className="flex flex-wrap items-center gap-1.5 break-words">
+                            <span className="hover:underline">{item.processName}</span>
+                            {hasImage && (
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenPresentation(item);
+                                }}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-normal hover:bg-blue-100 transition cursor-pointer whitespace-nowrap"
+                                title="این فرآیند دارای تصویر اسکرین‌شات پیوست است"
+                              >
+                                <ImageIcon className="h-2.5 w-2.5 text-blue-600" />
+                                <span>تصویر پیوست</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      
+                      {/* 3. Entity Type Badge */}
+                      {isColVisible('entityType') && (
+                        <td className="py-2.5 px-2 text-center">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
+                            entity === 'فرم'
+                              ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                              : entity === 'گزارش'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
+                          }`}>
+                            {entity}
                           </span>
-                        </div>
-                      </td>
+                        </td>
+                      )}
 
-                      {/* Edit & Delete Actions */}
-                      <td className="py-2.5 px-2 text-center">
-                        <div className="flex items-center justify-center gap-0.5">
-                          <button
+                      {/* 4. Org Unit */}
+                      {isColVisible('orgUnit') && (
+                        <td className="py-2.5 px-3">
+                          <span className="bg-[#EFEFEA] text-[#2D2C28] font-semibold px-2 py-0.5 rounded-md border border-[#DDDBCF] text-[11px] block truncate" title={item.orgUnit}>
+                            {item.orgUnit}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* 5. Execution Date */}
+                      {isColVisible('executionDate') && (
+                        <td className="py-2.5 px-2 text-center font-mono text-[#5A5852] text-[11px] whitespace-nowrap">
+                          {item.executionDate}
+                        </td>
+                      )}
+
+                      {/* 6. Operation Type */}
+                      {isColVisible('operationType') && (
+                        <td className="py-2.5 px-2 text-center">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
+                            isAuto
+                              ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                              : isNew
+                              ? 'bg-[#EDF2EB] text-[#2E462C] border border-[#D4DFD1]'
+                              : 'bg-[#FDF6F0] text-[#7C3E1D] border border-[#E8D5C4]'
+                          }`}>
+                            {item.operationType}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* 7. Status Column with quick switch dropdown */}
+                      {isColVisible('status') && (
+                        <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="relative inline-block text-center">
+                            <select
+                              value={itemStatus}
+                              onChange={(e) => handleQuickStatusChange(item, e.target.value as any, e)}
+                              className={`appearance-none px-2.5 py-0.5 pr-5 pl-2 text-[10px] font-bold rounded-full border cursor-pointer transition shadow-2xs focus:outline-none focus:ring-1 focus:ring-offset-1 text-center ${
+                                itemStatus === 'برای انجام'
+                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 focus:ring-amber-500'
+                                  : itemStatus === 'درحال انجام'
+                                  ? 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100 focus:ring-blue-500'
+                                  : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 focus:ring-emerald-500'
+                              }`}
+                              title="تغییر سریع وضعیت فرآیند (برای انجام / درحال انجام / انجام شده)"
+                            >
+                              <option value="برای انجام">برای انجام</option>
+                              <option value="درحال انجام">درحال انجام</option>
+                              <option value="انجام شده">انجام شده</option>
+                            </select>
+                            <ChevronDown className="w-2.5 h-2.5 absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                          </div>
+                        </td>
+                      )}
+
+                      {/* 8. Truncated Description Column with ellipsis, click opens full details */}
+                      {isColVisible('description') && (
+                        <td className="py-2.5 px-3 text-[#5A5852] font-medium text-[11px] max-w-[260px]">
+                          <div
+                            className="cursor-pointer hover:text-[#2D2C28] hover:bg-[#EFEFEA]/70 px-1.5 py-0.5 rounded transition-all"
                             onClick={() => handleOpenEdit(item)}
-                            className="p-1 rounded-md text-[#8A8880] hover:text-[#545D4B] hover:bg-[#EFEFEA] transition cursor-pointer"
-                            title="ویرایش کامل مشخصات فرآیند"
+                            title={`کلیک برای مشاهده متن کامل توضیحات:\n${item.description || 'بدون توضیحات'}`}
                           >
-                            <Edit2 className="h-3 w-3" />
-                          </button>
+                            {item.description ? (
+                              <span className="line-clamp-1 block truncate">
+                                {item.description.length > 48 ? `${item.description.slice(0, 48)}...` : item.description}
+                              </span>
+                            ) : (
+                              <span className="text-[#8A8880] italic text-[10px]">—</span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+
+                      {/* 9. BPMN Designer Column */}
+                      {isColVisible('bpmn') && (
+                        <td className="py-2.5 px-2 text-center">
+                          {item.bpmnXml || item.hasBpmn ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveBpmnItem(item);
+                                setIsBpmnModalOpen(true);
+                              }}
+                              className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
+                              title={`این فرآیند دارای دیاگرام BPMN است. کلیک جهت مشاهده یا ویرایش در bpmn.js`}
+                            >
+                              <Workflow className="h-3 w-3 text-emerald-600 group-hover/bpmnbtn:text-white transition-transform group-hover/bpmnbtn:scale-110" />
+                              <span>ویرایش BPMN</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover/bpmnbtn:bg-white" />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveBpmnItem(item);
+                                setIsBpmnModalOpen(true);
+                              }}
+                              className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#545D4B]/5 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/20 hover:border-[#545D4B] text-[10px] font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
+                              title={`طراحی دیاگرام استاندارد BPMN 2.0 برای فرآیند "${item.processName}" با ابزار bpmn.js`}
+                            >
+                              <Workflow className="h-2.5 w-2.5 text-[#545D4B] group-hover/bpmnbtn:text-white" />
+                              <span>+ طراحی BPMN</span>
+                            </button>
+                          )}
+                        </td>
+                      )}
+
+                      {/* 10. Show Slide in Fullscreen */}
+                      {isColVisible('slideFullscreen') && (
+                        <td className="py-2.5 px-2 text-center">
                           <button
+                            type="button"
                             onClick={() => {
-                              if (confirm(`آیا از حذف فرآیند "${item.processName}" اطمینان دارید؟`)) {
-                                onDeleteEraItem(item.id);
-                                if (filterExecutionMode === 'server') {
-                                  setServerTriggerCounter(c => c + 1);
-                                }
-                              }
+                              setHoveredSlideItem(null);
+                              setViewingFullscreenSlideItem(item);
                             }}
-                            className="p-1 rounded-md text-[#8A8880] hover:text-[#9C3A27] hover:bg-[#FAECE8] transition cursor-pointer"
-                            title="حذف فرآیند"
+                            onMouseEnter={() => handleSlideButtonMouseEnter(item)}
+                            onMouseLeave={handleSlideButtonMouseLeave}
+                            className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-[#545D4B]/10 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/25 hover:border-[#545D4B] text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/slidebtn whitespace-nowrap"
+                            title={isSlideHoverPreviewEnabled ? `هاور ماوس: پیش‌نمایش سریع (۸۰٪ صفحه) | کلیک: نمایش تمام‌صفحه فرآیند "${item.processName}"` : `نمایش اسلاید تمام‌صفحه فرآیند "${item.processName}"`}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Presentation className="h-3 w-3 group-hover/slidebtn:scale-110 transition-transform text-[#545D4B] group-hover/slidebtn:text-white" />
+                            <span>نمایش اسلاید</span>
                           </button>
-                        </div>
-                      </td>
+                        </td>
+                      )}
+
+                      {/* 11. SWITCH: Slide Presentation Switch Toggle */}
+                      {isColVisible('slideToggle') && (
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="inline-flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              role="switch"
+                              aria-checked={isSelectedForSlide}
+                              onClick={(e) => {
+                                handleToggleSlide(item, e);
+                              }}
+                              className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500/50 ${
+                                isSelectedForSlide ? 'bg-blue-600' : 'bg-slate-300'
+                              }`}
+                              title={isSelectedForSlide ? 'اسلاید فعال است' : 'اسلاید خاموش است'}
+                            >
+                              <span className="sr-only">سوییچ نمایش اسلایدی</span>
+                              <span
+                                aria-hidden="true"
+                                className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                  isSelectedForSlide ? '-translate-x-3.5' : 'translate-x-0'
+                                }`}
+                              />
+                            </button>
+                            <span className={`text-[10px] font-bold min-w-[28px] text-right ${isSelectedForSlide ? 'text-blue-700' : 'text-[#8A8880]'}`}>
+                              {isSelectedForSlide ? 'فعال' : 'خاموش'}
+                            </span>
+                          </div>
+                        </td>
+                      )}
+
+                      {/* 12. Edit & Delete Actions */}
+                      {isColVisible('actions') && (
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              onClick={() => handleOpenEdit(item)}
+                              className="p-1 rounded-md text-[#8A8880] hover:text-[#545D4B] hover:bg-[#EFEFEA] transition cursor-pointer"
+                              title="ویرایش کامل مشخصات فرآیند"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm(`آیا از حذف فرآیند "${item.processName}" اطمینان دارید؟`)) {
+                                  onDeleteEraItem(item.id);
+                                  if (filterExecutionMode === 'server') {
+                                    setServerTriggerCounter(c => c + 1);
+                                  }
+                                }
+                              }}
+                              className="p-1 rounded-md text-[#8A8880] hover:text-[#9C3A27] hover:bg-[#FAECE8] transition cursor-pointer"
+                              title="حذف فرآیند"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   );
                 })

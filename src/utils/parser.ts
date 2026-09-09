@@ -156,13 +156,31 @@ export function normalizePersianText(text?: string | null): string {
     .replace(/ي/g, 'ی')
     .replace(/ك/g, 'ک')
     .replace(/[\u200c\u200b\uFEFF]/g, ' ') // replace zero-width spaces with regular space
+    .replace(/\s*[:\-–—]\s*/g, ' ') // normalize colons and dashes with or without spaces to a single space
+    .replace(/[«»""'']/g, '') // remove quotation marks
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
 }
 
 /**
- * Classifies a letter's root cause (عامل) based on active rules
+ * Secondary cleaner preserving punctuation without colon/dash replacement
+ */
+export function cleanPersianText(text?: string | null): string {
+  if (!text) return '';
+  return text
+    .replace(/ي/g, 'ی')
+    .replace(/ك/g, 'ک')
+    .replace(/[\u200c\u200b\uFEFF]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Classifies a letter's root cause (عامل) based on active rules.
+ * Supports matching against any specific column (e.g. یادداشت, موضوع, شرح, گیرنده, etc.)
+ * or across all fields dynamically.
  */
 export function classifyLetterCause(
   letterData: {
@@ -171,6 +189,8 @@ export function classifyLetterCause(
     orgUnit?: string | null;
     description?: string | null;
     note?: string | null;
+    raw?: any;
+    [key: string]: any;
   },
   rules: CauseRule[] = DEFAULT_CAUSE_RULES
 ): { cause: string; reason: string; color: string } {
@@ -178,7 +198,7 @@ export function classifyLetterCause(
 
   const subjectNorm = normalizePersianText(`${letterData.subject || ''} ${letterData.originalSubject || ''}`);
   const extraNorm = normalizePersianText(`${letterData.description || ''} ${letterData.note || ''}`);
-  const combinedText = `${subjectNorm} ${extraNorm}`.trim();
+  const combinedBase = `${subjectNorm} ${extraNorm}`.trim();
   const unitNorm = normalizePersianText(letterData.orgUnit);
 
   // Sort rules by priority descending
@@ -196,21 +216,100 @@ export function classifyLetterCause(
     }
 
     const keywordNorm = normalizePersianText(rule.keyword);
-    let matched = false;
+    const keywordClean = cleanPersianText(rule.keyword);
+    const targetField = (rule.targetField || 'all').trim();
+    let textToEvaluate = '';
+    let rawTextClean = '';
+    let fieldDisplayName = '';
 
+    if (!targetField || targetField === 'all' || targetField === 'همه' || targetField === 'همه فیلدها' || targetField === 'همه ستون‌ها') {
+      // Evaluate all text: subject + description + note + all raw column values
+      let allRawValues = '';
+      if (letterData.raw && typeof letterData.raw === 'object') {
+        allRawValues = Object.values(letterData.raw)
+          .filter(v => v !== null && v !== undefined && typeof v !== 'object')
+          .map(v => String(v))
+          .join(' ');
+      }
+      const rawCombined = `${letterData.subject || ''} ${letterData.description || ''} ${letterData.note || ''} ${allRawValues}`;
+      textToEvaluate = normalizePersianText(rawCombined);
+      rawTextClean = cleanPersianText(rawCombined);
+      fieldDisplayName = 'همه ستون‌ها';
+    } else {
+      // Specific column requested (e.g. 'یادداشت', 'موضوع', or any dynamic column from imported Excel)
+      fieldDisplayName = targetField;
+      let rawVal: any = undefined;
+
+      // 1. Direct match or normalized key in letterData.raw
+      if (letterData.raw && typeof letterData.raw === 'object') {
+        if (letterData.raw[targetField] !== undefined) {
+          rawVal = letterData.raw[targetField];
+        } else {
+          const targetFieldNorm = normalizePersianText(targetField);
+          for (const k of Object.keys(letterData.raw)) {
+            if (normalizePersianText(k) === targetFieldNorm) {
+              rawVal = letterData.raw[k];
+              break;
+            }
+          }
+        }
+      }
+
+      // 2. Fallbacks for standard fields if not in raw
+      if (rawVal === undefined || rawVal === null || rawVal === '') {
+        const tfNorm = normalizePersianText(targetField);
+        if (tfNorm.includes('یادداشت') || tfNorm === 'note') {
+          rawVal = letterData.note ||
+            letterData.raw?.['یادداشت'] ||
+            letterData.raw?.['یادداشت نامه'] ||
+            letterData.raw?.['متن یادداشت'] ||
+            letterData.raw?.['شرح یادداشت'] ||
+            letterData.raw?.['یادداشت‌ها'] ||
+            letterData.raw?.['یادداشت ها'] ||
+            letterData.raw?.['توضیحات و یادداشت'] ||
+            letterData.raw?.['پانویس'] ||
+            letterData.raw?.['هامش'] ||
+            letterData.raw?.note ||
+            letterData.description ||
+            letterData.raw?.['شرح'] ||
+            letterData.raw?.['توضیحات نامه'];
+        } else if (tfNorm.includes('موضوع') || tfNorm === 'subject' || tfNorm.includes('عنوان')) {
+          rawVal = letterData.subject || letterData.originalSubject || letterData.raw?.['موضوع'] || letterData.raw?.['موضوع نامه'];
+        } else if (tfNorm.includes('شرح') || tfNorm.includes('توضیحات') || tfNorm === 'description') {
+          rawVal = letterData.description || letterData.raw?.['شرح'] || letterData.raw?.['توضیحات نامه'] || letterData.raw?.['توضیحات'];
+        } else if (tfNorm.includes('واحد') || tfNorm === 'unit') {
+          rawVal = letterData.orgUnit || letterData.raw?.['واحد سازمانی'];
+        } else if (tfNorm.includes('گیرنده')) {
+          rawVal = letterData.raw?.['گیرنده'] || letterData.raw?.['گیرنده نامه'];
+        } else if (tfNorm.includes('فرستنده')) {
+          rawVal = letterData.raw?.['فرستنده'] || letterData.raw?.['فرستنده نامه'];
+        } else if (tfNorm.includes('ایجاد') || tfNorm.includes('ثبت')) {
+          rawVal = letterData.raw?.['ایجاد کننده نامه'] || letterData.raw?.['ایجاد کننده'] || letterData.raw?.['ثبت کننده'];
+        } else if (letterData[targetField] !== undefined) {
+          rawVal = letterData[targetField];
+        }
+      }
+
+      const strVal = rawVal !== undefined && rawVal !== null ? String(rawVal) : '';
+      textToEvaluate = normalizePersianText(strVal);
+      rawTextClean = cleanPersianText(strVal);
+    }
+
+    let matched = false;
     if (rule.matchType === 'exact') {
-      matched = subjectNorm === keywordNorm || combinedText === keywordNorm;
+      matched = textToEvaluate === keywordNorm || rawTextClean === keywordClean;
     } else if (rule.matchType === 'startsWith') {
-      matched = subjectNorm.startsWith(keywordNorm) || combinedText.startsWith(keywordNorm);
+      matched = textToEvaluate.startsWith(keywordNorm) || rawTextClean.startsWith(keywordClean);
     } else {
       // Default: contains
-      matched = combinedText.includes(keywordNorm) || subjectNorm.includes(keywordNorm);
+      matched = textToEvaluate.includes(keywordNorm) || rawTextClean.includes(keywordClean);
     }
 
     if (matched) {
+      const fieldDesc = targetField && targetField !== 'all' ? ` در ستون «${fieldDisplayName}»` : '';
       return {
         cause: rule.cause.trim(),
-        reason: `قانون: تطابق با "${rule.keyword}"${rule.targetUnit ? ` (واحد: ${rule.targetUnit})` : ''}`,
+        reason: `قانون: تطابق با "${rule.keyword}"${fieldDesc}${rule.targetUnit ? ` (واحد: ${rule.targetUnit})` : ''}`,
         color: rule.color || '#2563EB'
       };
     }
@@ -762,6 +861,18 @@ export function processRawLetters(
       rawData["یادداشت"] ||
       rawAny["یادداشت نامه"] ||
       rawData["یادداشت نامه"] ||
+      rawAny["متن یادداشت"] ||
+      rawData["متن یادداشت"] ||
+      rawAny["شرح یادداشت"] ||
+      rawData["شرح یادداشت"] ||
+      rawAny["یادداشت‌ها"] ||
+      rawData["یادداشت‌ها"] ||
+      rawAny["یادداشت ها"] ||
+      rawData["یادداشت ها"] ||
+      rawAny["توضیحات و یادداشت"] ||
+      rawData["توضیحات و یادداشت"] ||
+      rawAny["پانویس"] ||
+      rawData["پانویس"] ||
       rawAny.note ||
       rawData.note ||
       ''
@@ -773,7 +884,8 @@ export function processRawLetters(
       originalSubject,
       orgUnit: unit,
       description,
-      note
+      note,
+      raw: rawData
     }, rules);
 
     // Check exclusion status
@@ -818,7 +930,8 @@ export function processRawLetters(
       registrationNumber,
       status: rawAny["وضعیت نامه"] || rawAny["وضعیت"] || null,
       urgency: (rawAny["فوریت"] || rawAny["فوریت نامه"] || rawAny["اولویت"] || 'عادی').toString(),
-      isReferral: Boolean(isReferral)
+      isReferral: Boolean(isReferral),
+      note: note || undefined
     });
   });
 
