@@ -22,7 +22,8 @@ import {
   ArrowLeft,
   Star,
   ListOrdered,
-  GripVertical
+  GripVertical,
+  Workflow
 } from 'lucide-react';
 import { ProcessedEraItem, RawEraItem } from '../types';
 import { JalaliDateInput } from './JalaliDateInput';
@@ -34,6 +35,7 @@ interface EraFormModalProps {
   initialItem?: ProcessedEraItem | null;
   existingUnits?: string[];
   existingProcesses?: string[];
+  onOpenBpmnDesigner?: (item: ProcessedEraItem) => void;
 }
 
 export const EraFormModal: React.FC<EraFormModalProps> = ({
@@ -42,13 +44,15 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   onSave,
   initialItem,
   existingUnits = [],
-  existingProcesses = []
+  existingProcesses = [],
+  onOpenBpmnDesigner
 }) => {
   const [processName, setProcessName] = useState('');
   const [orgUnit, setOrgUnit] = useState('');
   const [executionDate, setExecutionDate] = useState('1405/04/15');
   const [operationType, setOperationType] = useState<'جدید' | 'اصلاح' | 'اتوماتیک‌سازی'>('اصلاح');
   const [entityType, setEntityType] = useState<'فرم' | 'فرآیند' | 'گزارش'>('فرآیند');
+  const [status, setStatus] = useState<'برای انجام' | 'درحال انجام' | 'انجام شده'>('برای انجام');
   const [description, setDescription] = useState('');
   const [problemDescription, setProblemDescription] = useState('');
   const [solutionDescription, setSolutionDescription] = useState('');
@@ -86,6 +90,22 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         setEntityType('فرم');
       } else {
         setEntityType('فرآیند');
+      }
+
+      const st = (initialItem.status || (initialItem as any)["وضعیت"] || '').trim();
+      if (st.includes('برای انجام') || st.toLowerCase().includes('todo')) {
+        setStatus('برای انجام');
+      } else if (st.includes('درحال انجام') || st.includes('در حال انجام') || st.toLowerCase().includes('in-progress')) {
+        setStatus('درحال انجام');
+      } else if (st.includes('انجام شده') || st.toLowerCase().includes('done')) {
+        setStatus('انجام شده');
+      } else {
+        const cachedSt = typeof window !== 'undefined' ? localStorage.getItem(`era_status_${initialItem.id}`) : null;
+        if (cachedSt === 'برای انجام' || cachedSt === 'درحال انجام' || cachedSt === 'انجام شده') {
+          setStatus(cachedSt);
+        } else {
+          setStatus('انجام شده');
+        }
       }
 
       setDescription(initialItem.description);
@@ -174,6 +194,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       setOrgUnit(existingUnits[0] || 'فروش');
       setExecutionDate('1405/04/15');
       setOperationType('اصلاح');
+      setEntityType('فرآیند');
+      setStatus('برای انجام');
       setDescription('');
       setProblemDescription('');
       setSolutionDescription('');
@@ -324,6 +346,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         } else {
           localStorage.removeItem(`era_slide_num_${savedId}`);
         }
+        localStorage.setItem(`era_status_${savedId}`, status);
       } catch (e) {
         console.warn('Could not cache data in localStorage', e);
       }
@@ -336,6 +359,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       executionDate: executionDate.trim(),
       operationType,
       entityType,
+      status,
       description: description.trim(),
       problemDescription: problemDescription.trim() || undefined,
       solutionDescription: solutionDescription.trim() || undefined,
@@ -454,8 +478,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
               </div>
             </div>
 
-            {/* Row 2: Entity Type and Operation Type */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-[#E8E6DF]">
+            {/* Row 2: Entity Type, Operation Type and Status */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-[#E8E6DF]">
               {/* Entity Type (نوع موجودیت: فرم | فرآیند | گزارش) */}
               <div>
                 <label className="block font-bold text-[#4B5344] mb-1.5">
@@ -536,6 +560,61 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     }`}
                   >
                     <span>اتوماتیک‌سازی</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Process Status (وضعیت فرآیند: برای انجام | درحال انجام | انجام شده) */}
+              <div>
+                <label className="block font-bold text-[#4B5344] mb-1.5 flex items-center justify-between">
+                  <span>وضعیت فرآیند: *</span>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                    status === 'برای انجام' ? 'text-amber-800 bg-amber-100 border-amber-300' :
+                    status === 'درحال انجام' ? 'text-blue-800 bg-blue-100 border-blue-300' :
+                    'text-emerald-800 bg-emerald-100 border-emerald-300'
+                  }`}>
+                    {status}
+                  </span>
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF]">
+                  <button
+                    type="button"
+                    onClick={() => setStatus('برای انجام')}
+                    className={`py-2 px-1 rounded-lg font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+                      status === 'برای انجام'
+                        ? 'bg-amber-600 text-white shadow-xs'
+                        : 'text-[#615F59] hover:text-[#2D2C28]'
+                    }`}
+                    title="برای انجام"
+                  >
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">برای انجام</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('درحال انجام')}
+                    className={`py-2 px-1 rounded-lg font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+                      status === 'درحال انجام'
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-[#615F59] hover:text-[#2D2C28]'
+                    }`}
+                    title="درحال انجام"
+                  >
+                    <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">درحال انجام</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('انجام شده')}
+                    className={`py-2 px-1 rounded-lg font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+                      status === 'انجام شده'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-[#615F59] hover:text-[#2D2C28]'
+                    }`}
+                    title="انجام شده"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">انجام شده</span>
                   </button>
                 </div>
               </div>
@@ -1034,6 +1113,50 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 }
               }}
             />
+          </div>
+
+          {/* BPMN 2.0 Process Modeling Section */}
+          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-[#DDDBCF] space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start sm:items-center gap-2.5">
+                <div className="h-9 w-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                  <Workflow className="h-5 w-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-[#2D2C28] text-xs sm:text-sm flex items-center gap-2">
+                    <span>مدل‌سازی فرآیند با استاندارد BPMN 2.0 (bpmn.js)</span>
+                    {initialItem && (initialItem.bpmnXml || initialItem.hasBpmn) && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-300">
+                        <Check className="h-3 w-3 text-emerald-700" />
+                        <span>دیاگرام فعال</span>
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-[#75746E] mt-0.5">
+                    طراحی جریان کار، استخرهای سازمانی (Lanes)، رویدادها، فعالیت‌ها و درگاه‌های تصمیم‌گیری فرآیند با ویرایشگر تعاملی bpmn.js
+                  </p>
+                </div>
+              </div>
+
+              {initialItem && onOpenBpmnDesigner ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenBpmnDesigner(initialItem)}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#545D4B] hover:bg-[#434A3C] text-white text-xs font-bold transition-all shadow-xs hover:shadow-sm active:scale-95 cursor-pointer shrink-0"
+                >
+                  <Workflow className="h-4 w-4" />
+                  <span>
+                    {initialItem.bpmnXml || initialItem.hasBpmn
+                      ? 'ویرایش دیاگرام BPMN'
+                      : 'طراحی دیاگرام جدید BPMN'}
+                  </span>
+                </button>
+              ) : (
+                <span className="text-[11px] text-[#8A8880] italic self-start sm:self-auto">
+                  (برای دسترسی به طراح BPMN، ابتدا فرآیند را ذخیره نمایید)
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Modal Footer */}

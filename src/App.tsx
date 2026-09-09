@@ -7,6 +7,7 @@ import { EraFormModal } from './components/EraFormModal';
 import { FileUploadModal } from './components/FileUploadModal';
 import { SettingsModal } from './components/SettingsModal';
 import { AiBiAssistantModal } from './components/AiBiAssistantModal';
+import { BpmnDesignerModal } from './components/BpmnDesignerModal';
 import { INITIAL_LETTERS_DATA, INITIAL_ERA_DATA } from './data/initialData';
 import {
   processRawLetters,
@@ -26,6 +27,7 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
   const [slideEditingItem, setSlideEditingItem] = useState<ProcessedEraItem | null>(null);
+  const [bpmnEditingItem, setBpmnEditingItem] = useState<ProcessedEraItem | null>(null);
   const [settingsTab, setSettingsTab] = useState<'exclusions' | 'causes' | 'system' | 'backup'>('causes');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -348,6 +350,41 @@ export default function App() {
       console.warn('SQLite batch slide sync notice:', err);
     }
   }, []);
+
+  const handleReorderEraSlides = useCallback(async (orders: { id: string; slideNumber: number }[]) => {
+    const orderMap = new Map<string, number>();
+    orders.forEach(o => orderMap.set(o.id, o.slideNumber));
+
+    // Update rawEraItems state immediately
+    setRawEraItems(prev => prev.map((item, idx) => {
+      const pId = item.id || (item as any)._dbId || `era-${idx + 1}`;
+      if (orderMap.has(pId)) {
+        const num = orderMap.get(pId)!;
+        return {
+          ...item,
+          slideNumber: num,
+          slideOrder: num
+        };
+      }
+      return item;
+    }));
+
+    // Update localStorage
+    orders.forEach(o => {
+      try {
+        localStorage.setItem(`era_slide_num_${o.id}`, String(o.slideNumber));
+      } catch {}
+    });
+
+    // Call SQLite backend
+    try {
+      await api.reorderEraSlides(orders);
+    } catch (err) {
+      console.warn('SQLite reorder sync notice:', err);
+    }
+
+    showToast('ترتیب جدید اسلایدها با موفقیت در پایگاه داده ذخیره شد.');
+  }, [showToast]);
 
   // Processed Data memoization with rules engine and exclusion rules
   const processedLetters = useMemo(() => {
@@ -680,6 +717,8 @@ export default function App() {
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
         entityType: item.entityType || 'فرآیند',
+        "وضعیت": item.status || 'برای انجام',
+        status: item.status || 'برای انجام',
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -710,6 +749,8 @@ export default function App() {
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
         entityType: item.entityType || 'فرآیند',
+        "وضعیت": item.status || 'برای انجام',
+        status: item.status || 'برای انجام',
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -748,6 +789,7 @@ export default function App() {
           const updatedDate = item.executionDate !== undefined ? item.executionDate : (p.executionDate || p["تاریخ انجام"] || '');
           const updatedOpType = item.operationType !== undefined ? item.operationType : (p.operationType || p["نوع عملیات"] || 'اصلاح');
           const updatedEntityType = item.entityType !== undefined ? item.entityType : (p.entityType || p["نوع موجودیت"] || 'فرآیند');
+          const updatedStatus = item.status !== undefined ? item.status : (p.status || p["وضعیت"] || 'انجام شده');
           const updatedDesc = item.description !== undefined ? item.description : (p.description || p["توضیحات"] || '');
 
           return {
@@ -764,6 +806,8 @@ export default function App() {
             operationType: updatedOpType,
             "نوع موجودیت": updatedEntityType,
             entityType: updatedEntityType,
+            "وضعیت": updatedStatus,
+            status: updatedStatus,
             "توضیحات": updatedDesc,
             description: updatedDesc,
             isSelectedForSlide: item.isSelectedForSlide !== undefined ? item.isSelectedForSlide : p.isSelectedForSlide,
@@ -775,12 +819,25 @@ export default function App() {
             impactErrorMetric: item.impactErrorMetric !== undefined ? item.impactErrorMetric : p.impactErrorMetric,
             showImpactMetrics: item.showImpactMetrics !== undefined ? item.showImpactMetrics : p.showImpactMetrics,
             formImageUrl: item.formImageUrl !== undefined ? item.formImageUrl : p.formImageUrl,
-            formImages: item.formImages !== undefined ? item.formImages : p.formImages
+            formImages: item.formImages !== undefined ? item.formImages : p.formImages,
+            bpmnXml: item.bpmnXml !== undefined ? item.bpmnXml : p.bpmnXml,
+            bpmnSvg: item.bpmnSvg !== undefined ? item.bpmnSvg : p.bpmnSvg,
+            hasBpmn: item.hasBpmn !== undefined 
+              ? item.hasBpmn 
+              : item.bpmnXml !== undefined 
+              ? Boolean(typeof item.bpmnXml === 'string' && item.bpmnXml.trim() !== '') 
+              : p.hasBpmn
           };
         }
         return p;
       });
     });
+
+    if (item.id && item.status) {
+      try {
+        localStorage.setItem(`era_status_${item.id}`, item.status);
+      } catch {}
+    }
 
     try {
       if (item.id && !item.id.startsWith('era-')) {
@@ -791,6 +848,40 @@ export default function App() {
       console.warn('REST API update note:', err);
     }
   };
+
+  // Handler: Save BPMN diagram XML and SVG
+  const handleSaveBpmn = useCallback(async (itemId: string, bpmnXml: string, bpmnSvg?: string) => {
+    // 1. Immediately update rawEraItems state
+    setRawEraItems(prev => prev.map((item, idx) => {
+      const pId = item.id || (item as any)._dbId || `era-${idx + 1}`;
+      if (pId === itemId || item.id === itemId) {
+        return {
+          ...item,
+          bpmnXml,
+          bpmnSvg,
+          hasBpmn: Boolean(typeof bpmnXml === 'string' && bpmnXml.trim() !== '')
+        };
+      }
+      return item;
+    }));
+
+    // 2. Cache in localStorage for immediate client-side resilience
+    try {
+      localStorage.setItem(`era_bpmn_xml_${itemId}`, bpmnXml);
+      if (bpmnSvg) {
+        localStorage.setItem(`era_bpmn_svg_${itemId}`, bpmnSvg);
+      }
+    } catch {}
+
+    // 3. Persist to backend SQLite
+    try {
+      await api.saveEraBpmn(itemId, bpmnXml, bpmnSvg);
+    } catch (err) {
+      console.warn('Backend SQLite BPMN sync notice:', err);
+    }
+
+    showToast('دیاگرام BPMN فرآیند با موفقیت در پایگاه داده SQLite ذخیره شد.');
+  }, [showToast]);
 
   // Handler: Delete ERA Item via DELETE /api/era/:id
   const handleDeleteEraItem = async (id: string) => {
@@ -887,7 +978,11 @@ export default function App() {
       </div>
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className={`flex-1 w-full mx-auto py-6 transition-all duration-200 ${
+        activeTab === 'era'
+          ? 'max-w-[99vw] px-2 sm:px-4 lg:px-6'
+          : 'max-w-7xl px-4 sm:px-6 lg:px-8'
+      }`}>
         {activeTab === 'removeEdit' ? (
           <RemoveEditDashboard
             letters={processedLetters}
@@ -911,6 +1006,7 @@ export default function App() {
             onAddEraItem={handleAddEraItem}
             onUpdateEraItem={handleUpdateEraItem}
             onDeleteEraItem={handleDeleteEraItem}
+            onSaveBpmn={handleSaveBpmn}
             onGoToSlideshow={() => setActiveTab('slideshow')}
             onToggleSlide={handleToggleSlideSelection}
             onBatchUpdateSlideSelection={handleBatchUpdateSlideSelection}
@@ -924,9 +1020,11 @@ export default function App() {
             items={processedEraItems}
             onToggleSlideItem={handleToggleSlideSelection}
             onOpenEdit={(item) => setSlideEditingItem(item)}
+            onOpenBpmnDesigner={(item) => setBpmnEditingItem(item)}
             onClose={() => setActiveTab('era')}
             slideBeforeAfterUnderImage={eraVisibility.slideBeforeAfterUnderImage ?? true}
             onToggleBeforeAfterPosition={(val) => handleToggleEraVisibility('slideBeforeAfterUnderImage', val)}
+            onReorderSlides={handleReorderEraSlides}
           />
         )}
       </main>
@@ -958,6 +1056,20 @@ export default function App() {
           }}
           initialItem={slideEditingItem}
           existingUnits={Array.from(allOrganizationalUnits)}
+          onOpenBpmnDesigner={(item) => {
+            setSlideEditingItem(null);
+            setBpmnEditingItem(item);
+          }}
+        />
+      )}
+
+      {/* BPMN Designer Modal from Slideshow */}
+      {bpmnEditingItem && (
+        <BpmnDesignerModal
+          isOpen={!!bpmnEditingItem}
+          onClose={() => setBpmnEditingItem(null)}
+          item={bpmnEditingItem}
+          onSaveBpmn={handleSaveBpmn}
         />
       )}
 

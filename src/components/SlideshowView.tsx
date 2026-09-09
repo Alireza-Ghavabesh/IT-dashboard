@@ -33,7 +33,11 @@ import {
   ExternalLink,
   Edit,
   FileCode,
-  ChevronDown
+  ChevronDown,
+  ArrowUpDown,
+  GripVertical,
+  GripHorizontal,
+  Workflow
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import {
@@ -41,27 +45,32 @@ import {
   getProcessPresentation
 } from '../data/presentationTemplates';
 import { downloadPresentationHtml } from '../utils/htmlExport';
+import { SlideReorderModal } from './SlideReorderModal';
 
 interface SlideshowViewProps {
   items: ProcessedEraItem[];
   onToggleSlideItem?: (itemId: string, selected: boolean) => void;
   onOpenEdit?: (item: ProcessedEraItem) => void;
+  onOpenBpmnDesigner?: (item: ProcessedEraItem) => void;
   onClose?: () => void;
   initialItemId?: string;
   isModal?: boolean;
   slideBeforeAfterUnderImage?: boolean;
   onToggleBeforeAfterPosition?: (val: boolean) => void;
+  onReorderSlides?: (orders: { id: string; slideNumber: number }[]) => void;
 }
 
 export const SlideshowView: React.FC<SlideshowViewProps> = ({
   items = [],
   onToggleSlideItem,
   onOpenEdit,
+  onOpenBpmnDesigner,
   onClose,
   initialItemId,
   isModal = false,
   slideBeforeAfterUnderImage = true,
-  onToggleBeforeAfterPosition
+  onToggleBeforeAfterPosition,
+  onReorderSlides
 }) => {
   // Sort helper to ensure slides respect custom slideNumber or slideOrder
   const sortSlides = useCallback((list: ProcessedEraItem[]) => {
@@ -96,6 +105,14 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
     return sortSlides(selectedOnly);
   }, [items, initialItemId, isModal, sortSlides]);
 
+  // Local reordered state for immediate UI feedback
+  const [localSlideItems, setLocalSlideItems] = useState<ProcessedEraItem[]>([]);
+  useEffect(() => {
+    setLocalSlideItems(slideItems);
+  }, [slideItems]);
+
+  const displaySlideItems = localSlideItems.length > 0 ? localSlideItems : slideItems;
+
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
     if (initialItemId && Array.isArray(items)) {
       const sorted = sortSlides(items);
@@ -104,6 +121,45 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
     }
     return 0;
   });
+
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState<boolean>(false);
+  const [isBottomStripOpen, setIsBottomStripOpen] = useState<boolean>(false);
+  const [stripDraggedIndex, setStripDraggedIndex] = useState<number | null>(null);
+  const [stripDragOverIndex, setStripDragOverIndex] = useState<number | null>(null);
+
+  // Central reorder handler
+  const handleReorder = useCallback((orders: { id: string; slideNumber: number }[], reorderedItems: ProcessedEraItem[]) => {
+    const activeItem = displaySlideItems[currentIndex];
+    setLocalSlideItems(reorderedItems);
+
+    if (activeItem) {
+      const newIdx = reorderedItems.findIndex(it => it.id === activeItem.id);
+      if (newIdx !== -1) {
+        setCurrentIndex(newIdx);
+      }
+    }
+
+    if (onReorderSlides) {
+      onReorderSlides(orders);
+    }
+  }, [currentIndex, displaySlideItems, onReorderSlides]);
+
+  // Horizontal thumbnail drag and drop reorder
+  const handleStripDrop = (fromIdx: number, toIdx: number) => {
+    if (fromIdx === toIdx || fromIdx < 0 || toIdx < 0) return;
+    const nextList = [...displaySlideItems];
+    const [moved] = nextList.splice(fromIdx, 1);
+    nextList.splice(toIdx, 0, moved);
+
+    const orders = nextList.map((it, idx) => ({ id: it.id, slideNumber: idx + 1 }));
+    const updatedWithOrder = nextList.map((it, idx) => ({
+      ...it,
+      slideNumber: idx + 1,
+      slideOrder: idx + 1
+    }));
+
+    handleReorder(orders, updatedWithOrder);
+  };
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState<boolean>(false);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(isModal);
@@ -305,13 +361,13 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
 
   // Keep index within bounds
   useEffect(() => {
-    if (slideItems.length > 0 && currentIndex >= slideItems.length) {
-      setCurrentIndex(Math.max(0, slideItems.length - 1));
+    if (displaySlideItems.length > 0 && currentIndex >= displaySlideItems.length) {
+      setCurrentIndex(Math.max(0, displaySlideItems.length - 1));
     }
     setActiveImageIndex(0);
-  }, [slideItems.length, currentIndex]);
+  }, [displaySlideItems.length, currentIndex]);
 
-  const currentItem: ProcessedEraItem | null = slideItems[currentIndex] || slideItems[0] || null;
+  const currentItem: ProcessedEraItem | null = displaySlideItems[currentIndex] || displaySlideItems[0] || null;
 
   // Safe Presentation Template lookup
   const presentation: ProcessPresentationDetail | null = useMemo(() => {
@@ -370,16 +426,16 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
 
   // Navigation handlers
   const handlePrev = useCallback(() => {
-    if (slideItems.length === 0) return;
-    setCurrentIndex(prev => (prev > 0 ? prev - 1 : slideItems.length - 1));
+    if (displaySlideItems.length === 0) return;
+    setCurrentIndex(prev => (prev > 0 ? prev - 1 : displaySlideItems.length - 1));
     setActiveImageIndex(0);
-  }, [slideItems.length]);
+  }, [displaySlideItems.length]);
 
   const handleNext = useCallback(() => {
-    if (slideItems.length === 0) return;
-    setCurrentIndex(prev => (prev < slideItems.length - 1 ? prev + 1 : 0));
+    if (displaySlideItems.length === 0) return;
+    setCurrentIndex(prev => (prev < displaySlideItems.length - 1 ? prev + 1 : 0));
     setActiveImageIndex(0);
-  }, [slideItems.length]);
+  }, [displaySlideItems.length]);
 
   // Fullscreen toggle (handles both browser native fullscreen and window modal)
   const toggleFullscreen = useCallback(() => {
@@ -482,7 +538,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
   }, [isModal]);
 
   // If no items are selected for slideshow
-  if (!currentItem || slideItems.length === 0) {
+  if (!currentItem || displaySlideItems.length === 0) {
     return (
       <div className="bg-white text-[#2D2C28] rounded-3xl p-12 text-center border border-[#DDDBCF] space-y-5 max-w-2xl mx-auto shadow-sm my-10" dir="rtl">
         <div className="w-16 h-16 rounded-2xl bg-[#EFEFEA] border border-[#DDDBCF] flex items-center justify-center mx-auto text-[#545D4B]">
@@ -622,7 +678,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]">
-                اسلاید {currentIndex + 1} از {slideItems.length}
+                اسلاید {currentIndex + 1} از {displaySlideItems.length}
               </span>
               <span className="text-[11px] text-[#75746E] font-mono">{currentItem.executionDate}</span>
               <span className="text-[11px] font-bold text-amber-800 px-2 py-0.5 bg-amber-50 rounded-md border border-amber-200">
@@ -755,6 +811,19 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
             )}
           </div>
 
+          {/* Reorder Slides Drag & Drop Button */}
+          <button
+            onClick={() => setIsReorderModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white hover:bg-[#EFEFEA] text-[#2D2C28] border border-[#DDDBCF] text-xs font-bold transition cursor-pointer shadow-xs active:scale-95"
+            title="تغییر و مرتب‌سازی ترتیب اسلایدها با درگ و دراپ (Drag & Drop)"
+          >
+            <ArrowUpDown className="h-3.5 w-3.5 text-[#545D4B]" />
+            <span className="hidden sm:inline">ترتیب اسلایدها</span>
+            <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-[#EFEFEA] text-[#545D4B] border border-[#DDDBCF]">
+              {displaySlideItems.length}
+            </span>
+          </button>
+
           {/* Quick Edit Current Slide Button */}
           {onOpenEdit && currentItem && (
             <button
@@ -764,6 +833,31 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
             >
               <ExternalLink className="h-3.5 w-3.5 text-[#545D4B]" />
               <span className="hidden sm:inline">ویرایش اسلاید</span>
+            </button>
+          )}
+
+          {/* BPMN Workflow Button */}
+          {onOpenBpmnDesigner && currentItem && (
+            <button
+              onClick={() => onOpenBpmnDesigner(currentItem)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-xs active:scale-95 ${
+                currentItem.bpmnXml || currentItem.hasBpmn
+                  ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : 'bg-white hover:bg-[#EFEFEA] text-[#545D4B] border-[#DDDBCF]'
+              }`}
+              title={
+                currentItem.bpmnXml || currentItem.hasBpmn
+                  ? 'مشاهده و ویرایش دیاگرام BPMN این فرآیند در bpmn.js'
+                  : 'طراحی دیاگرام BPMN برای این فرآیند'
+              }
+            >
+              <Workflow className="h-3.5 w-3.5 text-emerald-700" />
+              <span className="hidden md:inline">
+                {currentItem.bpmnXml || currentItem.hasBpmn ? 'دیاگرام BPMN' : '+ طراح BPMN'}
+              </span>
+              {(currentItem.bpmnXml || currentItem.hasBpmn) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              )}
             </button>
           )}
 
@@ -1123,6 +1217,132 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
           </div>
         )}
 
+        {/* Horizontal Drag & Drop Filmstrip */}
+        {isBottomStripOpen && (
+          <div className="bg-white/95 rounded-2xl p-2.5 border border-[#DDDBCF] shadow-md flex flex-col gap-1.5 shrink-0 animate-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center justify-between px-1 text-[11px] text-[#75746E]">
+              <div className="flex items-center gap-1.5 font-bold text-[#2D2C28]">
+                <GripHorizontal className="h-3.5 w-3.5 text-[#545D4B]" />
+                <span>نوار چیدمان سریع (اسلایدها را با ماوس بگیرید و به چپ یا راست بکشید):</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsReorderModalOpen(true)}
+                  className="text-[10px] text-[#545D4B] hover:text-[#2D2C28] font-bold underline cursor-pointer"
+                >
+                  نمای پیشرفته چیدمان
+                </button>
+                <button
+                  onClick={() => setIsBottomStripOpen(false)}
+                  className="p-1 rounded-md text-[#75746E] hover:text-[#2D2C28] cursor-pointer"
+                  title="بستن نوار"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-thin">
+              {displaySlideItems.map((item, idx) => {
+                const isCur = currentIndex === idx;
+                const isBeingDragged = stripDraggedIndex === idx;
+                const isDropTarget = stripDragOverIndex === idx && stripDraggedIndex !== idx;
+                const img = item.formImages?.[0] || item.formImageUrl;
+
+                return (
+                  <div
+                    key={`strip-thumb-${item.id || idx}`}
+                    draggable={true}
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', String(idx));
+                      e.dataTransfer.effectAllowed = 'move';
+                      setStripDraggedIndex(idx);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (stripDragOverIndex !== idx) setStripDragOverIndex(idx);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      if (stripDraggedIndex !== null && stripDraggedIndex !== idx) {
+                        handleStripDrop(stripDraggedIndex, idx);
+                      }
+                      setStripDraggedIndex(null);
+                      setStripDragOverIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      setStripDraggedIndex(null);
+                      setStripDragOverIndex(null);
+                    }}
+                    onClick={() => setCurrentIndex(idx)}
+                    className={`relative group shrink-0 w-28 sm:w-32 rounded-xl border p-1.5 flex flex-col gap-1 transition-all cursor-grab active:cursor-grabbing select-none ${
+                      isBeingDragged
+                        ? 'opacity-30 scale-90 border-dashed border-[#545D4B] bg-[#EFEFEA]'
+                        : isDropTarget
+                        ? 'border-[#545D4B] ring-2 ring-[#545D4B] bg-emerald-50 scale-105 shadow-md'
+                        : isCur
+                        ? 'bg-white border-[#545D4B] ring-2 ring-[#545D4B]/40 shadow-sm'
+                        : 'bg-[#FAFAF7] hover:bg-white border-[#DDDBCF] hover:border-[#8A8880]'
+                    }`}
+                  >
+                    {/* Thumbnail Frame */}
+                    <div className="w-full h-14 rounded-lg bg-[#F4F3EE] border border-[#E8E6DF] flex items-center justify-center overflow-hidden relative">
+                      {img ? (
+                        <img src={img} alt={item.processName} className="w-full h-full object-cover" />
+                      ) : (
+                        <Building2 className="h-5 w-5 text-[#8A8880]" />
+                      )}
+                      <span className="absolute top-1 right-1 bg-black/70 text-white text-[9px] font-mono font-bold px-1 rounded">
+                        {idx + 1}
+                      </span>
+                    </div>
+
+                    {/* Title & Unit */}
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold text-[#2D2C28] truncate leading-tight">
+                        {item.processName}
+                      </p>
+                      <p className="text-[9px] text-[#75746E] truncate mt-0.5">
+                        {item.orgUnit}
+                      </p>
+                    </div>
+
+                    {/* Step buttons on hover */}
+                    <div className="absolute inset-x-1 bottom-1 hidden group-hover:flex items-center justify-between pointer-events-auto bg-black/70 rounded px-1 py-0.5 text-white">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (idx > 0) handleStripDrop(idx, idx - 1);
+                        }}
+                        disabled={idx === 0}
+                        className="disabled:opacity-20 hover:text-emerald-300"
+                        title="یک پله به جلو"
+                      >
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                      <span className="text-[8px] font-bold">{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (idx < displaySlideItems.length - 1) handleStripDrop(idx, idx + 1);
+                        }}
+                        disabled={idx === displaySlideItems.length - 1}
+                        className="disabled:opacity-20 hover:text-emerald-300"
+                        title="یک پله به عقب"
+                      >
+                        <ChevronLeft className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Bottom Slide Footer Navigation Strip */}
         <div className="bg-[#FAFAF7] rounded-2xl p-2.5 sm:p-3 border border-[#DDDBCF] flex items-center justify-between gap-2 shrink-0">
           {/* Previous Slide Button */}
@@ -1134,20 +1354,35 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
             <span className="hidden sm:inline">اسلاید قبلی</span>
           </button>
 
-          {/* Slide Selector Indicators Dots */}
-          <div className="flex items-center gap-1.5 overflow-x-auto max-w-[50vw] py-1 px-2">
-            {slideItems.map((item, idx) => (
-              <button
-                key={`slide-dot-${item.id || idx}-${idx}`}
-                onClick={() => setCurrentIndex(idx)}
-                className={`transition-all rounded-full cursor-pointer shrink-0 ${
-                  currentIndex === idx
-                    ? 'w-7 h-2 bg-[#545D4B] shadow-xs'
-                    : 'w-2 h-2 bg-[#DDDBCF] hover:bg-[#8A8880]'
-                }`}
-                title={`${idx + 1}. ${item.processName}`}
-              />
-            ))}
+          {/* Slide Selector Indicators Dots & Reorder Strip Toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsBottomStripOpen(!isBottomStripOpen)}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer border shadow-xs ${
+                isBottomStripOpen
+                  ? 'bg-[#545D4B] text-white border-[#434A3C]'
+                  : 'bg-white hover:bg-[#EFEFEA] text-[#545D4B] border-[#DDDBCF]'
+              }`}
+              title="نمایش نوار بندانگشتی اسلایدها برای جابجایی مستقیم با درگ و دراپ"
+            >
+              <GripHorizontal className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">نوار اسلایدها ({displaySlideItems.length})</span>
+            </button>
+
+            <div className="flex items-center gap-1.5 overflow-x-auto max-w-[35vw] sm:max-w-[45vw] py-1 px-1">
+              {displaySlideItems.map((item, idx) => (
+                <button
+                  key={`slide-dot-${item.id || idx}-${idx}`}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`transition-all rounded-full cursor-pointer shrink-0 ${
+                    currentIndex === idx
+                      ? 'w-7 h-2 bg-[#545D4B] shadow-xs'
+                      : 'w-2 h-2 bg-[#DDDBCF] hover:bg-[#8A8880]'
+                  }`}
+                  title={`${idx + 1}. ${item.processName}`}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Next Slide Button */}
@@ -1375,6 +1610,19 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
           )}
         </div>
       )}
+
+      {/* Drag and Drop Slide Reordering Modal */}
+      <SlideReorderModal
+        isOpen={isReorderModalOpen}
+        onClose={() => setIsReorderModalOpen(false)}
+        items={items}
+        currentIndex={currentIndex}
+        onSelectSlide={(idx) => {
+          setCurrentIndex(idx);
+        }}
+        onReorder={handleReorder}
+        onToggleSlideItem={onToggleSlideItem}
+      />
     </div>
   );
 };

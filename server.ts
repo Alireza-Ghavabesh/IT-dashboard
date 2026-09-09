@@ -566,6 +566,7 @@ async function startServer() {
         unit,
         opType,
         entityType,
+        status: statusFilter,
         search,
         startDate,
         endDate,
@@ -619,6 +620,8 @@ async function startServer() {
           operationType: item.operationType || raw.operationType || raw["نوع عملیات"],
           "نوع موجودیت": item.entityType || raw.entityType || raw["نوع موجودیت"] || 'فرآیند',
           entityType: item.entityType || raw.entityType || raw["نوع موجودیت"] || 'فرآیند',
+          "وضعیت": raw.status || raw["وضعیت"] || 'انجام شده',
+          status: raw.status || raw["وضعیت"] || 'انجام شده',
           "توضیحات": item.description !== undefined ? item.description : (raw["توضیحات"] || raw.description || ''),
           description: item.description !== undefined ? item.description : (raw["توضیحات"] || raw.description || ''),
           formImageUrl: formImages[0] || raw.formImageUrl || undefined,
@@ -626,6 +629,8 @@ async function startServer() {
           isSelectedForSlide: raw.isSelectedForSlide !== undefined ? Boolean(raw.isSelectedForSlide) : undefined,
           slideNumber: raw.slideNumber !== undefined ? (Number(raw.slideNumber) || null) : (raw.slideOrder !== undefined ? (Number(raw.slideOrder) || null) : undefined),
           slideOrder: raw.slideNumber !== undefined ? (Number(raw.slideNumber) || null) : (raw.slideOrder !== undefined ? (Number(raw.slideOrder) || null) : undefined),
+          bpmnXml: raw.bpmnXml || undefined,
+          bpmnSvg: raw.bpmnSvg || undefined,
           _dbId: item.id
         };
       });
@@ -680,6 +685,14 @@ async function startServer() {
           }
         }
 
+        if (statusFilter && statusFilter !== 'all') {
+          const sQuery = normText(String(statusFilter));
+          const itemStatus = normText(item.status || 'انجام شده');
+          if (itemStatus !== sQuery) {
+            return false;
+          }
+        }
+
         if (slideFilter && slideFilter !== 'all') {
           if (slideFilter === 'selected' && !item.isSelectedForSlide) return false;
           if (slideFilter === 'unselected' && item.isSelectedForSlide) return false;
@@ -705,11 +718,12 @@ async function startServer() {
           const mDate = (item.executionDate || '').includes(q);
           const mEntity = (item.entityType || '').toLowerCase().includes(q);
           const mOp = (item.operationType || '').toLowerCase().includes(q);
+          const mStatus = (item.status || '').toLowerCase().includes(q);
           const mProblem = (item.problemDescription || '').toLowerCase().includes(q);
           const mSolution = (item.solutionDescription || '').toLowerCase().includes(q);
           const mAchStr = Array.isArray(item.achievements) ? item.achievements.join(' ') : (item.achievements || '');
           const mAch = mAchStr.toLowerCase().includes(q);
-          if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mProblem && !mSolution && !mAch) {
+          if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mStatus && !mProblem && !mSolution && !mAch) {
             return false;
           }
         }
@@ -725,7 +739,12 @@ async function startServer() {
         creationCount: filtered.filter(p => p.operationType === 'جدید').length,
         fixCount: filtered.filter(p => p.operationType === 'اصلاح').length,
         autoCount: filtered.filter(p => p.operationType === 'اتوماتیک‌سازی' || p.operationType === 'اتوماتیک سازی' || p.operationType.includes('اتوماتیک') || p.operationType.includes('اتوماسیون')).length,
-        withImagesCount: filtered.filter(p => Boolean((p.formImages && p.formImages.length > 0) || p.formImageUrl)).length
+        withImagesCount: filtered.filter(p => Boolean((p.formImages && p.formImages.length > 0) || p.formImageUrl)).length,
+        statusCounts: {
+          todo: filtered.filter(p => p.status === 'برای انجام').length,
+          inProgress: filtered.filter(p => p.status === 'درحال انجام').length,
+          done: filtered.filter(p => (p.status || 'انجام شده') === 'انجام شده').length
+        }
       };
 
       // Pagination support (if page parameter is provided and not 'all')
@@ -1045,6 +1064,64 @@ async function startServer() {
     }
   });
 
+  // PATCH /api/era/:id/status (Directly update process status in SQLite database)
+  app.patch('/api/era/:id/status', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status) {
+        return res.status(400).json({ success: false, error: 'Status is required' });
+      }
+
+      let target = await prisma.eraProcess.findUnique({ where: { id } });
+      if (!target) {
+        target = await prisma.eraProcess.findFirst({
+          where: {
+            OR: [
+              { processName: id },
+              { id: { contains: id.replace('era-', '') } }
+            ]
+          }
+        });
+      }
+
+      if (!target) {
+        return res.status(404).json({ success: false, error: 'ERA process not found' });
+      }
+
+      let existingRaw: any = {};
+      if (target.rawJson) {
+        try {
+          existingRaw = JSON.parse(target.rawJson);
+        } catch {}
+      }
+
+      const updatedRaw = {
+        ...existingRaw,
+        status: String(status).trim()
+      };
+
+      const updated = await prisma.eraProcess.update({
+        where: { id: target.id },
+        data: {
+          rawJson: JSON.stringify(updatedRaw)
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          id: updated.id,
+          processName: updated.processName,
+          status: String(status).trim()
+        }
+      });
+    } catch (error: any) {
+      console.error('Error updating status in SQLite:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   // POST /api/era/batch-slide (Directly batch toggle slide selection in SQLite database)
   app.post('/api/era/batch-slide', async (req: Request, res: Response) => {
     try {
@@ -1125,6 +1202,69 @@ async function startServer() {
       res.json({ success: true, updatedCount });
     } catch (error: any) {
       console.error('Error reordering ERA slides in SQLite:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // PUT /api/era/:id/bpmn (Save BPMN diagram XML and SVG for an ERA process)
+  app.put('/api/era/:id/bpmn', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { bpmnXml, bpmnSvg } = req.body;
+
+      if (!id) {
+        return res.status(400).json({ success: false, error: 'Process ID is required' });
+      }
+
+      let target = await prisma.eraProcess.findUnique({ where: { id } });
+      if (!target) {
+        target = await prisma.eraProcess.findFirst({
+          where: {
+            OR: [
+              { processName: id },
+              { id: { contains: id.replace('era-', '') } }
+            ]
+          }
+        });
+      }
+
+      if (!target) {
+        // Find by fuzzy match in all records
+        const allEra = await prisma.eraProcess.findMany();
+        target = allEra.find(e => e.id === id || e.processName === id || e.id.includes(id.replace('era-', ''))) || null;
+      }
+
+      if (!target) {
+        return res.status(404).json({ success: false, error: 'ERA process not found' });
+      }
+
+      let existingRaw: any = {};
+      if (target.rawJson) {
+        try {
+          existingRaw = JSON.parse(target.rawJson);
+        } catch {}
+      }
+
+      existingRaw.bpmnXml = bpmnXml;
+      if (bpmnSvg !== undefined) {
+        existingRaw.bpmnSvg = bpmnSvg;
+      }
+
+      const updated = await prisma.eraProcess.update({
+        where: { id: target.id },
+        data: {
+          rawJson: JSON.stringify(existingRaw)
+        }
+      });
+
+      res.json({
+        success: true,
+        id: updated.id,
+        processName: updated.processName,
+        hasBpmn: Boolean(bpmnXml && bpmnXml.trim() !== '')
+      });
+    } catch (error: any) {
+      console.error('Error saving BPMN diagram in SQLite:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });

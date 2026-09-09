@@ -80,6 +80,7 @@ export type LetterActionType = 'حذف' | 'ویرایش';
 
 export type EraOperationType = 'جدید' | 'اصلاح' | 'اتوماتیک‌سازی' | 'اتوماتیک سازی' | string;
 export type EraEntityType = 'فرم' | 'فرآیند' | 'گزارش' | string;
+export type EraProcessStatus = 'برای انجام' | 'درحال انجام' | 'انجام شده' | string;
 
 export interface CauseRule {
   id: string;
@@ -143,6 +144,8 @@ export interface RawEraItem {
   "نوع عملیات": EraOperationType;
   "نوع موجودیت"?: EraEntityType;
   entityType?: EraEntityType;
+  "وضعیت"?: EraProcessStatus;
+  status?: EraProcessStatus;
   توضیحات: string;
   problemDescription?: string;
   solutionDescription?: string;
@@ -154,6 +157,9 @@ export interface RawEraItem {
   isSelectedForSlide?: boolean;
   slideNumber?: number | null; // شماره و ترتیب اسلاید
   slideOrder?: number | null;
+  bpmnXml?: string; // ساختار استاندارد دیاگرام BPMN 2.0 XML
+  bpmnSvg?: string; // تصویر وکتور رندر شده از دیاگرام BPMN
+  hasBpmn?: boolean;
   [key: string]: any;
 }
 
@@ -167,6 +173,7 @@ export interface ProcessedEraItem {
   monthName: string;
   operationType: EraOperationType;
   entityType?: EraEntityType;
+  status?: EraProcessStatus;
   description: string;
   createdAt: string;
   formImageUrl?: string; // Main screenshot/photo of the created form
@@ -183,6 +190,9 @@ export interface ProcessedEraItem {
   impactTimeMetric?: string; // متن شاخص صرفه‌جویی زمان (مثلا: کاهش بیش از ۸۰٪ زمان پردازش حواله‌ها)
   impactErrorMetric?: string; // متن شاخص کاهش خطای انسانی (مثلا: صفر شدن خطاهای مغایرت حساب بانکی و تراستی)
   showImpactMetrics?: boolean; // آیا کادر شاخص‌های اثرگذاری در اسلاید نمایش داده شود
+  bpmnXml?: string; // نمودار فرآیند با فرمت استاندارد BPMN 2.0 XML
+  bpmnSvg?: string; // تصویر وکتور رندر شده از دیاگرام BPMN
+  hasBpmn?: boolean; // آیا فرآیند دارای دیاگرام طراحی شده است
 }
 
 export interface UnitMonthlyStat {

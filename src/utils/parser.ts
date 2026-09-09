@@ -1,4 +1,4 @@
-import { RawLetterItem, ProcessedLetter, LetterActionType, RawEraItem, ProcessedEraItem, UnitMonthlyStat, CauseRule, ExclusionRule } from '../types';
+import { RawLetterItem, ProcessedLetter, LetterActionType, RawEraItem, ProcessedEraItem, EraProcessStatus, UnitMonthlyStat, CauseRule, ExclusionRule } from '../types';
 
 export const PERSIAN_MONTH_NAMES: { [key: string]: string } = {
   '01': 'فروردین',
@@ -956,6 +956,46 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       }
     }
 
+    // Process Status (وضعیت فرآیند: برای انجام | درحال انجام | انجام شده)
+    const rawStatus = (
+      item.status ||
+      rawAny["وضعیت"] ||
+      rawAny["وضعیت فرآیند"] ||
+      rawAny["وضعیت فرایند"] ||
+      rawAny["status"] ||
+      ''
+    ).toString().trim();
+
+    let status: EraProcessStatus = 'انجام شده';
+    if (
+      rawStatus.includes('برای انجام') || 
+      rawStatus.toLowerCase().includes('todo') || 
+      rawStatus.toLowerCase().includes('pending')
+    ) {
+      status = 'برای انجام';
+    } else if (
+      rawStatus.includes('درحال انجام') || 
+      rawStatus.includes('در حال انجام') || 
+      rawStatus.toLowerCase().includes('in-progress') || 
+      rawStatus.toLowerCase().includes('doing')
+    ) {
+      status = 'درحال انجام';
+    } else if (
+      rawStatus.includes('انجام شده') || 
+      rawStatus.includes('تکمیل') || 
+      rawStatus.toLowerCase().includes('done') || 
+      rawStatus.toLowerCase().includes('completed')
+    ) {
+      status = 'انجام شده';
+    } else if (rawStatus) {
+      status = rawStatus as any;
+    } else if (typeof window !== 'undefined') {
+      const cachedStatus = localStorage.getItem(`era_status_${finalId}`) || localStorage.getItem(`era_status_${baseId}`);
+      if (cachedStatus) {
+        status = cachedStatus as any;
+      }
+    }
+
     // Problem, Solution and Operational Achievements descriptions (custom presentation text)
     let problemDescription = item.problemDescription || rawAny["مشکل"] || rawAny["چالش"] || undefined;
     let solutionDescription = item.solutionDescription || rawAny["راهکار"] || rawAny["اقدام"] || undefined;
@@ -1003,8 +1043,48 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       }
     }
 
+    // Safely resolve BPMN XML
+    let resolvedBpmnXml: string | undefined = undefined;
+    if (typeof item.bpmnXml === 'string' && item.bpmnXml.trim() !== '') {
+      resolvedBpmnXml = item.bpmnXml;
+    } else if (typeof rawAny["bpmnXml"] === 'string' && rawAny["bpmnXml"].trim() !== '') {
+      resolvedBpmnXml = rawAny["bpmnXml"];
+    } else if (typeof rawAny["دیاگرام"] === 'string' && rawAny["دیاگرام"].trim() !== '') {
+      resolvedBpmnXml = rawAny["دیاگرام"];
+    } else if (typeof window !== 'undefined') {
+      try {
+        const cachedXml = localStorage.getItem(`era_bpmn_xml_${finalId}`) || localStorage.getItem(`era_bpmn_xml_${baseId}`);
+        if (typeof cachedXml === 'string' && cachedXml.trim() !== '') {
+          resolvedBpmnXml = cachedXml;
+        }
+      } catch {}
+    }
+
+    // Safely resolve BPMN SVG
+    let resolvedBpmnSvg: string | undefined = undefined;
+    if (typeof item.bpmnSvg === 'string' && item.bpmnSvg.trim() !== '') {
+      resolvedBpmnSvg = item.bpmnSvg;
+    } else if (typeof rawAny["bpmnSvg"] === 'string' && rawAny["bpmnSvg"].trim() !== '') {
+      resolvedBpmnSvg = rawAny["bpmnSvg"];
+    } else if (typeof window !== 'undefined') {
+      try {
+        const cachedSvg = localStorage.getItem(`era_bpmn_svg_${finalId}`) || localStorage.getItem(`era_bpmn_svg_${baseId}`);
+        if (typeof cachedSvg === 'string' && cachedSvg.trim() !== '') {
+          resolvedBpmnSvg = cachedSvg;
+        }
+      } catch {}
+    }
+
+    const hasBpmnResolved = Boolean(
+      item.hasBpmn === true ||
+      rawAny["hasBpmn"] === true ||
+      (typeof resolvedBpmnXml === 'string' && resolvedBpmnXml.trim().length > 0)
+    );
+
     return {
       id: finalId,
+      _dbId: (rawAny as any)._dbId || item._dbId || (finalId.startsWith('era-') ? undefined : finalId),
+      rawIndex: index,
       processName,
       orgUnit,
       executionDate: dateParsed.dateStr,
@@ -1013,6 +1093,7 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       monthName: dateParsed.monthName,
       operationType,
       entityType,
+      status,
       description: description,
       createdAt: item.createdAt || new Date().toISOString(),
       formImageUrl: item.formImageUrl,
@@ -1028,7 +1109,10 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       showAchievements: showAchievements === true,
       impactTimeMetric,
       impactErrorMetric,
-      showImpactMetrics: showImpactMetrics === true
+      showImpactMetrics: showImpactMetrics === true,
+      bpmnXml: resolvedBpmnXml,
+      bpmnSvg: resolvedBpmnSvg,
+      hasBpmn: hasBpmnResolved
     };
   });
 }

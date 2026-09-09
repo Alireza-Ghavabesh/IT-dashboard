@@ -61,12 +61,14 @@ import {
   YAxis,
   CartesianGrid
 } from 'recharts';
+import { BpmnDesignerModal } from './BpmnDesignerModal';
 
 interface EraDashboardProps {
   eraItems: ProcessedEraItem[];
   onAddEraItem: (item: Partial<ProcessedEraItem>) => void;
   onUpdateEraItem: (item: Partial<ProcessedEraItem>) => void;
   onDeleteEraItem: (id: string) => void;
+  onSaveBpmn?: (itemId: string, bpmnXml: string, bpmnSvg?: string) => Promise<void> | void;
   onGoToSlideshow?: () => void;
   onToggleSlide?: (id: string) => void;
   onBatchUpdateSlideSelection?: (itemIds: string[], isSelected: boolean) => void;
@@ -83,6 +85,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   onAddEraItem,
   onUpdateEraItem,
   onDeleteEraItem,
+  onSaveBpmn,
   onGoToSlideshow,
   onToggleSlide,
   onBatchUpdateSlideSelection,
@@ -94,6 +97,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedOpType, setSelectedOpType] = useState<string>('all');
   const [selectedEntityType, setSelectedEntityType] = useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState<boolean>(false);
@@ -119,6 +123,9 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [isPresentationOpen, setIsPresentationOpen] = useState<boolean>(false);
   const [viewingFullscreenSlideItem, setViewingFullscreenSlideItem] = useState<ProcessedEraItem | null>(null);
   const [isAiChartModalOpen, setIsAiChartModalOpen] = useState<boolean>(false);
+  const [activeBpmnItem, setActiveBpmnItem] = useState<ProcessedEraItem | null>(null);
+  const [isBpmnModalOpen, setIsBpmnModalOpen] = useState<boolean>(false);
+  const [bpmnFilter, setBpmnFilter] = useState<'all' | 'with-bpmn' | 'without-bpmn'>('all');
 
   // Slide Hover Popup Preview Settings (Controlled via Settings Modal) & Hover State
   const isSlideHoverPreviewEnabled = eraVisibility?.slideHoverPreview ?? false;
@@ -237,6 +244,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           unit: selectedUnit,
           opType: selectedOpType,
           entityType: selectedEntityType,
+          status: selectedStatus,
           search: debouncedSearchQuery,
           startDate: startDate,
           endDate: endDate,
@@ -271,6 +279,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     selectedUnit,
     selectedOpType,
     selectedEntityType,
+    selectedStatus,
     slideFilter,
     debouncedSearchQuery,
     startDate,
@@ -388,6 +397,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       if (selectedEntityType !== 'all' && norm(item.entityType || 'فرآیند') !== norm(selectedEntityType)) {
         return false;
       }
+      if (selectedStatus !== 'all') {
+        const itemStatus = item.status || 'انجام شده';
+        if (itemStatus !== selectedStatus) {
+          return false;
+        }
+      }
       if (slideFilter === 'selected' && !item.isSelectedForSlide) {
         return false;
       }
@@ -407,15 +422,44 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         const mDate = item.executionDate.includes(q);
         const mEntity = norm(item.entityType || '').includes(q);
         const mOp = norm(item.operationType || '').includes(q);
+        const mStatus = norm(item.status || 'انجام شده').includes(q);
         const mProblem = norm(item.problemDescription || '').includes(q);
         const mSolution = norm(item.solutionDescription || '').includes(q);
         const mAchStr = Array.isArray(item.achievements) ? item.achievements.join(' ') : (item.achievements || '');
         const mAch = norm(mAchStr).includes(q);
-        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mProblem && !mSolution && !mAch) return false;
+        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mStatus && !mProblem && !mSolution && !mAch) return false;
+      }
+      if (bpmnFilter === 'with-bpmn' && !item.hasBpmn && !item.bpmnXml) {
+        return false;
+      }
+      if (bpmnFilter === 'without-bpmn' && (item.hasBpmn || item.bpmnXml)) {
+        return false;
       }
       return true;
     });
-  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, slideFilter, startDate, endDate, searchQuery]);
+  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, startDate, endDate, searchQuery, bpmnFilter]);
+
+  // BPMN counts for filter options
+  const withBpmnCount = useMemo(() => {
+    return eraItems.filter(item => Boolean(item.hasBpmn || item.bpmnXml)).length;
+  }, [eraItems]);
+
+  const withoutBpmnCount = useMemo(() => {
+    return eraItems.filter(item => !item.hasBpmn && !item.bpmnXml).length;
+  }, [eraItems]);
+
+  // Status counts for filter options
+  const todoCount = useMemo(() => {
+    return eraItems.filter(item => (item.status || 'انجام شده') === 'برای انجام').length;
+  }, [eraItems]);
+
+  const inProgressCount = useMemo(() => {
+    return eraItems.filter(item => (item.status || 'انجام شده') === 'درحال انجام').length;
+  }, [eraItems]);
+
+  const doneCount = useMemo(() => {
+    return eraItems.filter(item => (item.status || 'انجام شده') === 'انجام شده').length;
+  }, [eraItems]);
 
   // Count active filters
   const activeFiltersCount = useMemo(() => {
@@ -423,17 +467,21 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       selectedUnit !== 'all',
       selectedOpType !== 'all',
       selectedEntityType !== 'all',
+      selectedStatus !== 'all',
       slideFilter !== 'all',
+      bpmnFilter !== 'all',
       searchQuery.trim().length > 0,
       Boolean(startDate || endDate)
     ].filter(Boolean).length;
-  }, [selectedUnit, selectedOpType, selectedEntityType, slideFilter, searchQuery, startDate, endDate]);
+  }, [selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, bpmnFilter, searchQuery, startDate, endDate]);
 
   const handleResetAllFilters = () => {
     setSelectedUnit('all');
     setSelectedOpType('all');
     setSelectedEntityType('all');
+    setSelectedStatus('all');
     setSlideFilter('all');
+    setBpmnFilter('all');
     setSearchQuery('');
     setStartDate('');
     setEndDate('');
@@ -566,6 +614,29 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           isSelectedForSlide: enableAll
         });
       });
+    }
+  };
+
+  // Quick status update directly from table row
+  const handleQuickStatusChange = async (item: ProcessedEraItem, newStatus: 'برای انجام' | 'درحال انجام' | 'انجام شده', e?: React.MouseEvent | React.ChangeEvent) => {
+    if (e && 'stopPropagation' in e) {
+      e.stopPropagation();
+    }
+    
+    if (filterExecutionMode === 'server') {
+      setServerItems(prev => prev.map(si => (si.id === item.id || (si as any)._dbId === item.id) ? { ...si, status: newStatus } : si));
+    }
+
+    onUpdateEraItem({
+      id: item.id,
+      status: newStatus
+    });
+
+    try {
+      localStorage.setItem(`era_status_${item.id}`, newStatus);
+      await api.updateEraStatus(item.id, newStatus);
+    } catch (err) {
+      console.warn('Could not update status via REST API:', err);
     }
   };
 
@@ -1780,6 +1851,60 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
+            {/* Quick Status Filter Tabs */}
+            <div className="flex items-center bg-[#EBEBE6] p-0.5 rounded-xl border border-[#DDDBCF] text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('all')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer ${
+                  selectedStatus === 'all'
+                    ? 'bg-white text-[#2D2C28] shadow-xs'
+                    : 'text-[#615F59] hover:text-[#2D2C28]'
+                }`}
+              >
+                همه ({formatNumber(eraItems.length)})
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus(prev => prev === 'برای انجام' ? 'all' : 'برای انجام')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  selectedStatus === 'برای انجام'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-[#615F59] hover:text-amber-700'
+                }`}
+                title="فیلتر وضعیت: برای انجام"
+              >
+                <Clock className="w-3 h-3" />
+                <span>برای انجام ({formatNumber(todoCount)})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus(prev => prev === 'درحال انجام' ? 'all' : 'درحال انجام')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  selectedStatus === 'درحال انجام'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-[#615F59] hover:text-blue-700'
+                }`}
+                title="فیلتر وضعیت: درحال انجام"
+              >
+                <TrendingUp className="w-3 h-3" />
+                <span>درحال انجام ({formatNumber(inProgressCount)})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus(prev => prev === 'انجام شده' ? 'all' : 'انجام شده')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  selectedStatus === 'انجام شده'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-[#615F59] hover:text-emerald-700'
+                }`}
+                title="فیلتر وضعیت: انجام شده"
+              >
+                <CheckCircle2 className="w-3 h-3" />
+                <span>انجام شده ({formatNumber(doneCount)})</span>
+              </button>
+            </div>
+
             {/* دکمه ثبت فرآیند جدید - رو به روی نوشته جدول جامع اقدامات */}
             <button
               onClick={handleOpenAdd}
@@ -1808,7 +1933,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         </div>
 
         {/* Table Content */}
-        <div className="overflow-x-auto lg:overflow-x-clip rounded-2xl border border-[#DDDBCF] relative">
+        <div className="overflow-x-auto rounded-2xl border border-[#DDDBCF] relative w-full shadow-2xs bg-white">
           {serverLoading && filterExecutionMode === 'server' && (
             <div className="absolute inset-0 bg-white/60 backdrop-blur-xs flex items-center justify-center z-10">
               <div className="bg-white p-3 rounded-2xl shadow-lg border border-[#CBD5E1] flex items-center gap-2 text-xs font-bold text-[#1E293B]">
@@ -1818,15 +1943,15 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
             </div>
           )}
 
-          <table className="w-full text-xs text-right border-collapse table-auto lg:table-fixed">
+          <table className="w-full text-xs text-right border-collapse table-auto">
             <thead>
               {/* Row 1: Column Titles */}
               <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF]">
-                <th className="py-2.5 px-1.5 w-10 text-center text-[11px]">#</th>
-                <th className="py-2.5 px-2 w-[18%] text-right text-xs">نام فرآیند / موجودیت</th>
-                <th className="py-2.5 px-1 w-[8%] text-center text-xs">نوع</th>
-                <th className="py-2.5 px-2 w-[12%] text-right text-xs">واحد سازمانی</th>
-                <th className="py-2.5 px-1 w-[10%] text-center text-xs">
+                <th className="py-2.5 px-2 w-10 min-w-[38px] text-center text-[11px]">#</th>
+                <th className="py-2.5 px-3 min-w-[200px] text-right text-xs">نام فرآیند / موجودیت</th>
+                <th className="py-2.5 px-2 min-w-[70px] text-center text-xs">نوع</th>
+                <th className="py-2.5 px-3 min-w-[130px] text-right text-xs">واحد سازمانی</th>
+                <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">
                   <div className="flex items-center justify-center gap-1">
                     <span>تاریخ انجام</span>
                     <button
@@ -1847,11 +1972,18 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                     </button>
                   </div>
                 </th>
-                <th className="py-2.5 px-1 w-[9%] text-center text-xs">نوع عملیات</th>
-                <th className="py-2.5 px-2 w-[25%] text-right text-xs">توضیحات و شرح تغییرات</th>
-                <th className="py-2.5 px-1 w-[9%] text-center text-xs">نمایش اسلاید</th>
-                <th className="py-2.5 px-1 w-[7%] text-center text-xs">اسلایدشو</th>
-                <th className="py-2.5 px-1 w-[4%] text-center text-xs">عملیات</th>
+                <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">نوع عملیات</th>
+                <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">وضعیت</th>
+                <th className="py-2.5 px-3 min-w-[220px] max-w-[320px] text-right text-xs">توضیحات و شرح تغییرات</th>
+                <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">
+                  <div className="flex items-center justify-center gap-1" title="طراحی و مدل‌سازی فرآیند با bpmn.js استاندارد BPMN 2.0">
+                    <Workflow className="h-3.5 w-3.5 text-[#545D4B]" />
+                    <span>دیاگرام BPMN</span>
+                  </div>
+                </th>
+                <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">نمایش اسلاید</th>
+                <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">اسلایدشو</th>
+                <th className="py-2.5 px-2 min-w-[65px] text-center text-xs">عملیات</th>
               </tr>
 
               {/* Row 2: Per-column Filter Inputs Aligned Directly Above/Below Each Column Header */}
@@ -2205,17 +2337,46 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                   </select>
                 </th>
 
-                {/* 7. Description Placeholder */}
+                {/* 7. Status Filter */}
+                <th className="p-1 font-normal">
+                  <select
+                    value={selectedStatus}
+                    onChange={e => setSelectedStatus(e.target.value)}
+                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    title="فیلتر وضعیت فرآیند"
+                  >
+                    <option value="all">همه وضعیت‌ها</option>
+                    <option value="برای انجام">برای انجام ({todoCount})</option>
+                    <option value="درحال انجام">درحال انجام ({inProgressCount})</option>
+                    <option value="انجام شده">انجام شده ({doneCount})</option>
+                  </select>
+                </th>
+
+                {/* 8. Description Placeholder */}
                 <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
                   —
                 </th>
 
-                {/* 8. Slide Single View Column Placeholder */}
+                {/* 8. BPMN Filter */}
+                <th className="p-1 font-normal">
+                  <select
+                    value={bpmnFilter}
+                    onChange={e => setBpmnFilter(e.target.value as any)}
+                    className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                    title="فیلتر بر اساس داشتن دیاگرام BPMN"
+                  >
+                    <option value="all">همه</option>
+                    <option value="with-bpmn">دارای BPMN ({withBpmnCount})</option>
+                    <option value="without-bpmn">بدون BPMN ({withoutBpmnCount})</option>
+                  </select>
+                </th>
+
+                {/* 9. Slide Single View Column Placeholder */}
                 <th className="p-1 font-normal text-center text-[#8A8880] text-[10px]">
                   —
                 </th>
 
-                {/* 9. Slide Batch Filter */}
+                {/* 10. Slide Batch Filter */}
                 <th className="p-1 font-normal">
                   <select
                     value={slideFilter}
@@ -2247,18 +2408,25 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E6DF]">
-              {(filterExecutionMode === 'server' ? serverItems : filteredItems).length === 0 ? (
+              {(filterExecutionMode === 'server' && bpmnFilter !== 'all' 
+                ? serverItems.filter(i => bpmnFilter === 'with-bpmn' ? Boolean(i.hasBpmn || i.bpmnXml) : (!i.hasBpmn && !i.bpmnXml))
+                : (filterExecutionMode === 'server' ? serverItems : filteredItems)
+              ).length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-[#8A8880] font-medium">
+                  <td colSpan={12} className="py-8 text-center text-[#8A8880] font-medium">
                     {serverLoading ? 'در حال جستجو و دریافت اطلاعات...' : 'موردی یافت نشد.'}
                   </td>
                 </tr>
               ) : (
-                (filterExecutionMode === 'server' ? serverItems : filteredItems).map((item, idx) => {
+                (filterExecutionMode === 'server' && bpmnFilter !== 'all'
+                  ? serverItems.filter(i => bpmnFilter === 'with-bpmn' ? Boolean(i.hasBpmn || i.bpmnXml) : (!i.hasBpmn && !i.bpmnXml))
+                  : (filterExecutionMode === 'server' ? serverItems : filteredItems)
+                ).map((item, idx) => {
                   const isNew = item.operationType === 'جدید';
                   const isAuto = item.operationType === 'اتوماتیک‌سازی' || item.operationType === 'اتوماتیک سازی';
                   const entity = item.entityType || 'فرآیند';
                   const isSelectedForSlide = !!item.isSelectedForSlide;
+                  const itemStatus = item.status || 'انجام شده';
                   const hasImage = !!(
                     (item.formImages && item.formImages.length > 0) ||
                     item.formImageUrl ||
@@ -2270,12 +2438,16 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
                   return (
                     <tr key={`era-row-${item.id || idx}-${idx}`} className="hover:bg-[#F5F5F0] transition-colors group">
-                      <td className="py-2 px-1 text-center text-[#8A8880] font-mono text-[11px]">
+                      <td className="py-2.5 px-2 text-center text-[#8A8880] font-mono text-[11px]">
                         {rowNumber}
                       </td>
-                      <td className="py-2 px-2 font-bold text-[#2D2C28] text-xs">
+                      <td 
+                        className="py-2.5 px-3 font-bold text-[#2D2C28] text-xs cursor-pointer hover:text-[#545D4B] transition-colors"
+                        onClick={() => handleOpenEdit(item)}
+                        title={`مشاهده و ویرایش فرآیند: ${item.processName}`}
+                      >
                         <div className="flex flex-wrap items-center gap-1.5 break-words">
-                          <span>{item.processName}</span>
+                          <span className="hover:underline">{item.processName}</span>
                           {hasImage && (
                             <span 
                               onClick={(e) => {
@@ -2293,7 +2465,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                       </td>
                       
                       {/* Entity Type Badge */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
                           entity === 'فرم'
                             ? 'bg-purple-100 text-purple-800 border border-purple-200'
@@ -2305,16 +2477,16 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                         </span>
                       </td>
 
-                      <td className="py-2 px-2">
-                        <span className="bg-[#EFEFEA] text-[#2D2C28] font-semibold px-1.5 py-0.5 rounded-md border border-[#DDDBCF] text-[11px] block truncate" title={item.orgUnit}>
+                      <td className="py-2.5 px-3">
+                        <span className="bg-[#EFEFEA] text-[#2D2C28] font-semibold px-2 py-0.5 rounded-md border border-[#DDDBCF] text-[11px] block truncate" title={item.orgUnit}>
                           {item.orgUnit}
                         </span>
                       </td>
-                      <td className="py-2 px-1 text-center font-mono text-[#5A5852] text-[11px] whitespace-nowrap">
+                      <td className="py-2.5 px-2 text-center font-mono text-[#5A5852] text-[11px] whitespace-nowrap">
                         {item.executionDate}
                       </td>
-                      <td className="py-2 px-1 text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
+                      <td className="py-2.5 px-2 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
                           isAuto
                             ? 'bg-blue-50 text-blue-800 border border-blue-200'
                             : isNew
@@ -2324,12 +2496,79 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                           {item.operationType}
                         </span>
                       </td>
-                      <td className="py-2 px-2 text-[#5A5852] leading-relaxed font-medium text-[11px] break-words">
-                        {item.description}
+
+                      {/* Status Column with quick switch dropdown */}
+                      <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
+                        <div className="relative inline-block text-center">
+                          <select
+                            value={itemStatus}
+                            onChange={(e) => handleQuickStatusChange(item, e.target.value as any, e)}
+                            className={`appearance-none px-2.5 py-0.5 pr-5 pl-2 text-[10px] font-bold rounded-full border cursor-pointer transition shadow-2xs focus:outline-none focus:ring-1 focus:ring-offset-1 text-center ${
+                              itemStatus === 'برای انجام'
+                                ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 focus:ring-amber-500'
+                                : itemStatus === 'درحال انجام'
+                                ? 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100 focus:ring-blue-500'
+                                : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 focus:ring-emerald-500'
+                            }`}
+                            title="تغییر سریع وضعیت فرآیند (برای انجام / درحال انجام / انجام شده)"
+                          >
+                            <option value="برای انجام">برای انجام</option>
+                            <option value="درحال انجام">درحال انجام</option>
+                            <option value="انجام شده">انجام شده</option>
+                          </select>
+                          <ChevronDown className="w-2.5 h-2.5 absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                        </div>
+                      </td>
+
+                      {/* Truncated Description Column with ellipsis, click opens full details */}
+                      <td className="py-2.5 px-3 text-[#5A5852] font-medium text-[11px] max-w-[280px]">
+                        <div
+                          className="line-clamp-1 truncate cursor-pointer hover:text-[#2D2C28] hover:bg-[#EFEFEA]/70 px-1.5 py-0.5 rounded transition-all"
+                          onClick={() => handleOpenEdit(item)}
+                          title={`کلیک برای مشاهده متن کامل توضیحات:\n${item.description || 'بدون توضیحات'}`}
+                        >
+                          {item.description ? (
+                            <span className="truncate block">{item.description}</span>
+                          ) : (
+                            <span className="text-[#8A8880] italic text-[10px]">—</span>
+                          )}
+                        </div>
+                      </td>
+
+                      {/* BPMN Designer Column */}
+                      <td className="py-2.5 px-2 text-center">
+                        {item.bpmnXml || item.hasBpmn ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveBpmnItem(item);
+                              setIsBpmnModalOpen(true);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-300 hover:border-emerald-600 text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
+                            title={`این فرآیند دارای دیاگرام BPMN است. کلیک جهت مشاهده یا ویرایش در bpmn.js`}
+                          >
+                            <Workflow className="h-3 w-3 text-emerald-600 group-hover/bpmnbtn:text-white transition-transform group-hover/bpmnbtn:scale-110" />
+                            <span>ویرایش BPMN</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 group-hover/bpmnbtn:bg-white" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveBpmnItem(item);
+                              setIsBpmnModalOpen(true);
+                            }}
+                            className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#545D4B]/5 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/20 hover:border-[#545D4B] text-[10px] font-semibold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/bpmnbtn whitespace-nowrap"
+                            title={`طراحی دیاگرام استاندارد BPMN 2.0 برای فرآیند "${item.processName}" با ابزار bpmn.js`}
+                          >
+                            <Workflow className="h-2.5 w-2.5 text-[#545D4B] group-hover/bpmnbtn:text-white" />
+                            <span>+ طراحی BPMN</span>
+                          </button>
+                        )}
                       </td>
 
                       {/* NEW COLUMN: Show Slide in Fullscreen */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         <button
                           type="button"
                           onClick={() => {
@@ -2338,7 +2577,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                           }}
                           onMouseEnter={() => handleSlideButtonMouseEnter(item)}
                           onMouseLeave={handleSlideButtonMouseLeave}
-                          className="inline-flex items-center justify-center gap-1 px-2 py-1 rounded-lg bg-[#545D4B]/10 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/25 hover:border-[#545D4B] text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/slidebtn whitespace-nowrap"
+                          className="inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-lg bg-[#545D4B]/10 hover:bg-[#545D4B] text-[#545D4B] hover:text-white border border-[#545D4B]/25 hover:border-[#545D4B] text-[11px] font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer group/slidebtn whitespace-nowrap"
                           title={isSlideHoverPreviewEnabled ? `هاور ماوس: پیش‌نمایش سریع (۸۰٪ صفحه) | کلیک: نمایش تمام‌صفحه فرآیند "${item.processName}"` : `نمایش اسلاید تمام‌صفحه فرآیند "${item.processName}"`}
                         >
                           <Presentation className="h-3 w-3 group-hover/slidebtn:scale-110 transition-transform text-[#545D4B] group-hover/slidebtn:text-white" />
@@ -2347,7 +2586,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                       </td>
 
                       {/* SWITCH: Slide Presentation Switch Toggle */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         <div className="inline-flex items-center justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
@@ -2376,12 +2615,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                       </td>
 
                       {/* Edit & Delete Actions */}
-                      <td className="py-2 px-1 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         <div className="flex items-center justify-center gap-0.5">
                           <button
                             onClick={() => handleOpenEdit(item)}
                             className="p-1 rounded-md text-[#8A8880] hover:text-[#545D4B] hover:bg-[#EFEFEA] transition cursor-pointer"
-                            title="ویرایش"
+                            title="ویرایش کامل مشخصات فرآیند"
                           >
                             <Edit2 className="h-3 w-3" />
                           </button>
@@ -2395,7 +2634,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                               }
                             }}
                             className="p-1 rounded-md text-[#8A8880] hover:text-[#9C3A27] hover:bg-[#FAECE8] transition cursor-pointer"
-                            title="حذف"
+                            title="حذف فرآیند"
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -2511,7 +2750,40 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         initialItem={editingItem}
         existingUnits={allUnits}
         existingProcesses={allProcesses}
+        onOpenBpmnDesigner={(item) => {
+          setIsModalOpen(false);
+          setActiveBpmnItem(item);
+          setIsBpmnModalOpen(true);
+        }}
       />
+
+      {/* BPMN 2.0 Process Modeler & Designer Modal */}
+      {isBpmnModalOpen && activeBpmnItem && (
+        <BpmnDesignerModal
+          isOpen={isBpmnModalOpen}
+          onClose={() => {
+            setIsBpmnModalOpen(false);
+            setActiveBpmnItem(null);
+          }}
+          item={activeBpmnItem}
+          onSaveBpmn={async (itemId, bpmnXml, bpmnSvg) => {
+            if (onSaveBpmn) {
+              await onSaveBpmn(itemId, bpmnXml, bpmnSvg);
+            } else {
+              onUpdateEraItem({
+                id: itemId,
+                bpmnXml,
+                bpmnSvg,
+                hasBpmn: true
+              });
+            }
+            setActiveBpmnItem(prev => prev ? { ...prev, bpmnXml, bpmnSvg, hasBpmn: true } : null);
+            if (filterExecutionMode === 'server') {
+              setServerTriggerCounter(c => c + 1);
+            }
+          }}
+        />
+      )}
 
       {/* Fullscreen Single Process Slide Presentation (Exact Slide from Slideshow View) */}
       {viewingFullscreenSlideItem && (
@@ -2524,6 +2796,11 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           onOpenEdit={(item) => {
             setViewingFullscreenSlideItem(null);
             handleOpenEdit(item);
+          }}
+          onOpenBpmnDesigner={(item) => {
+            setViewingFullscreenSlideItem(null);
+            setActiveBpmnItem(item);
+            setIsBpmnModalOpen(true);
           }}
           onClose={() => setViewingFullscreenSlideItem(null)}
           slideBeforeAfterUnderImage={eraVisibility?.slideBeforeAfterUnderImage ?? true}

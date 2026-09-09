@@ -54,7 +54,11 @@ export const Navbar: React.FC<NavbarProps> = ({
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-[#FAFAF7]/95 backdrop-blur-md border-b border-[#E2E0D8] shadow-xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={`mx-auto transition-all duration-200 ${
+        activeTab === 'era'
+          ? 'max-w-[99vw] px-2 sm:px-4 lg:px-6'
+          : 'max-w-7xl px-4 sm:px-6 lg:px-8'
+      }`}>
         <div className="flex flex-col lg:grid lg:grid-cols-[1fr_auto_1fr] items-center justify-between py-3 gap-3">
           {/* Logo & Main Title (Start in RTL) */}
           <div className="flex items-center gap-3 w-full lg:w-auto justify-start">

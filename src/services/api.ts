@@ -4,6 +4,7 @@ export interface EraQueryParams {
   unit?: string;
   opType?: string;
   entityType?: string;
+  status?: string;
   search?: string;
   startDate?: string;
   endDate?: string;
@@ -30,6 +31,7 @@ export interface EraServerFilterResponse {
     fixCount: number;
     autoCount: number;
     withImagesCount: number;
+    statusCounts?: Record<string, number>;
   };
   data: RawEraItem[];
 }
@@ -164,6 +166,7 @@ export const api = {
     if (params.unit && params.unit !== 'all') url.searchParams.set('unit', params.unit);
     if (params.opType && params.opType !== 'all') url.searchParams.set('opType', params.opType);
     if (params.entityType && params.entityType !== 'all') url.searchParams.set('entityType', params.entityType);
+    if (params.status && params.status !== 'all') url.searchParams.set('status', params.status);
     if (params.search) url.searchParams.set('search', params.search);
     if (params.startDate) url.searchParams.set('startDate', params.startDate);
     if (params.endDate) url.searchParams.set('endDate', params.endDate);
@@ -212,6 +215,24 @@ export const api = {
     if (!res.ok) throw new Error('Failed to delete ERA process');
   },
 
+  async saveEraBpmn(id: string, bpmnXml: string, bpmnSvg?: string): Promise<any> {
+    try {
+      const res = await fetch(`/api/era/${encodeURIComponent(id)}/bpmn`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bpmnXml, bpmnSvg })
+      });
+      if (!res.ok) {
+        // Fallback to updateEraItem
+        return await this.updateEraItem(id, { bpmnXml, bpmnSvg } as any);
+      }
+      return res.json();
+    } catch (e) {
+      console.warn('saveEraBpmn notice, trying general update:', e);
+      return await this.updateEraItem(id, { bpmnXml, bpmnSvg } as any);
+    }
+  },
+
   async toggleEraSlide(id: string, isSelectedForSlide: boolean): Promise<any> {
     try {
       const res = await fetch(`/api/era/${encodeURIComponent(id)}/slide`, {
@@ -226,6 +247,24 @@ export const api = {
       return res.json();
     } catch (e) {
       console.warn('REST API toggleEraSlide notice:', e);
+      return { success: false };
+    }
+  },
+
+  async updateEraStatus(id: string, status: string): Promise<any> {
+    try {
+      const res = await fetch(`/api/era/${encodeURIComponent(id)}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update status in SQLite');
+      }
+      return res.json();
+    } catch (e) {
+      console.warn('REST API updateEraStatus notice:', e);
       return { success: false };
     }
   },

@@ -65,3 +65,139 @@ jdp-container .jdp-icon-minus {
   border-radius: 6px !important;
 }
 
+/* ==========================================================================
+   BPMN 2.0 Titr Font & High-Quality Diagram Styling
+   ========================================================================== */
+
+@font-face {
+  font-family: 'B Titr';
+  src: local('B Titr'), local('BTitr'), local('Titr'), local('B Titr Bold'), local('Far.Titr'), local('IRANTitr');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Titr';
+  src: local('B Titr'), local('BTitr'), local('Titr'), local('B Titr Bold'), local('Far.Titr'), local('IRANTitr');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Force B Titr font on all BPMN elements, labels, and text inside the modeler */
+.bpmn-canvas,
+.djs-container,
+.djs-container svg {
+  font-family: 'B Titr', 'Titr', 'BTitr', 'B-Titr', 'Far.Titr', 'IRANTitr', 'Vazirmatn', system-ui, sans-serif !important;
+}
+
+.djs-container text,
+.djs-container tspan,
+.djs-label,
+.djs-label text,
+.djs-label tspan,
+.djs-visual text,
+.djs-visual tspan,
+.djs-direct-editing-content,
+.djs-direct-editing-parent {
+  font-family: 'B Titr', 'Titr', 'BTitr', 'B-Titr', 'Far.Titr', 'IRANTitr', 'Vazirmatn', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+}
+
+/* Rounded and smooth corners for tasks */
+.djs-container .djs-shape.bpmn-task rect,
+.djs-container .djs-shape rect {
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+/* Direct editing inline text box styling */
+.djs-direct-editing-content {
+  direction: rtl !important;
+  text-align: center !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18), 0 0 0 3px rgba(2, 132, 199, 0.25) !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1.5px solid #0284c7 !important;
+  padding: 4px 10px !important;
+  z-index: 1000 !important;
+}
+
+/* ==========================================================================
+   Visio-Style Connection Labels & Text Shielding
+   ========================================================================== */
+
+/* 1. Halo Protection: Gives text an opaque white perimeter stroke so lines never cut into glyphs */
+.djs-container .djs-shape.djs-label text,
+.djs-container .djs-shape.djs-label tspan,
+.djs-container text.djs-label,
+.djs-container text.djs-label tspan,
+.djs-container g[data-element-id$="_label"] text,
+.djs-container g[data-element-id$="_label"] tspan,
+.djs-container .djs-connection text,
+.djs-container .djs-connection tspan,
+.djs-container .djs-connection .djs-label text,
+.djs-container .djs-connection .djs-label tspan,
+.djs-container g[data-element-id*="Flow"] text,
+.djs-container g[data-element-id*="Flow"] tspan,
+.djs-container g[data-element-id*="Sequence"] text,
+.djs-container g[data-element-id*="Sequence"] tspan {
+  paint-order: stroke fill !important;
+  stroke: #ffffff !important;
+  stroke-width: 9px !important;
+  stroke-linejoin: round !important;
+  stroke-linecap: round !important;
+  stroke-opacity: 1 !important;
+}
+
+/* 2. Visio Badge Rect Styling: Pure white opaque card with smooth corners and crisp subtle border */
+.djs-container .visio-label-badge {
+  fill: #ffffff !important;
+  fill-opacity: 1 !important;
+  rx: 6px !important;
+  ry: 6px !important;
+  transition: stroke 0.15s ease, filter 0.15s ease;
+}
+
+/* 3. When the label shape is selected or hovered */
+.djs-container .djs-shape.djs-label.selected .visio-label-badge {
+  stroke: #0284c7 !important;
+  stroke-width: 1.8px !important;
+  filter: drop-shadow(0 2px 6px rgba(2, 132, 199, 0.35)) !important;
+}
+
+.djs-container .djs-shape.djs-label:hover .visio-label-badge {
+  stroke: #475569 !important;
+}
+
+/* 4. Hide badge when user is in direct editing mode */
+.djs-label-hidden .visio-label-badge {
+  display: none !important;
+}
+
+/* Subtle canvas background pattern */
+.bpmn-canvas-bg {
+  background-color: #fafafa;
+  background-image: radial-gradient(#d1d5db 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* Completely hide bpmn.io branding and logo watermark */
+.bjs-powered-by,
+a.bjs-powered-by,
+.djs-container .bjs-powered-by,
+.bpmn-canvas .bjs-powered-by {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+
