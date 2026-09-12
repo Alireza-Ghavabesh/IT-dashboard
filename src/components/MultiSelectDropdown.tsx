@@ -124,7 +124,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
   }, [selectedValues, allLabel, normalizedOptions]);
 
   return (
-    <div ref={containerRef} className={`relative ${className}`} id={id}>
+    <div ref={containerRef} className={`relative min-w-0 w-full ${className}`} id={id}>
       {/* Trigger Button */}
       <button
         type="button"
@@ -171,7 +171,7 @@ export const MultiSelectDropdown: React.FC<MultiSelectDropdownProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 bg-white rounded-2xl shadow-xl border border-[#DDDBCF] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute right-0 top-full mt-1.5 w-72 sm:w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-xl border border-[#DDDBCF] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Search Header */}
           <div className="p-2.5 bg-[#F5F5F0] border-b border-[#DDDBCF] space-y-2">
             <div className="relative">

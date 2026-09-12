@@ -1,14 +1,16 @@
 @import "tailwindcss";
 
 @layer base {
-  body {
+  html, body {
     font-family: 'Vazirmatn', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: #F5F5F0;
     color: #2D2C28;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 }
 
-/* Custom smooth natural scrollbar */
+/* Custom smooth natural scrollbar (Desktop) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -21,6 +23,86 @@
 ::-webkit-scrollbar-thumb {
   background: #C7C5BB;
   border-radius: 9999px;
+}
+
+/* ==========================================================================
+   Mobile Horizontal Scrollbar Hiding
+   Allows smooth finger / touch scrolling on mobile while completely hiding
+   the horizontal scrollbar thumb (غلتک) and track.
+   ========================================================================== */
+@media (max-width: 768px), (pointer: coarse) {
+  /* 1. Global Webkit horizontal scrollbar suppression */
+  ::-webkit-scrollbar:horizontal,
+  *::-webkit-scrollbar:horizontal {
+    height: 0px !important;
+    width: 0px !important;
+    display: none !important;
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-thumb:horizontal,
+  *::-webkit-scrollbar-thumb:horizontal {
+    display: none !important;
+    background: transparent !important;
+  }
+
+  ::-webkit-scrollbar-track:horizontal,
+  ::-webkit-scrollbar-track-piece:horizontal,
+  *::-webkit-scrollbar-track:horizontal,
+  *::-webkit-scrollbar-track-piece:horizontal {
+    display: none !important;
+    background: transparent !important;
+  }
+
+  /* 2. Containers with horizontal overflow (Data tables, tab strips, chip groups) */
+  .overflow-x-auto,
+  .overflow-x-scroll,
+  .overflow-auto,
+  [class*="overflow-x-"] {
+    -webkit-overflow-scrolling: touch !important; /* Smooth momentum scrolling on iOS Safari */
+    scrollbar-width: none !important; /* Firefox Android / Mobile */
+    -ms-overflow-style: none !important; /* IE / Edge Mobile */
+  }
+
+  .overflow-x-auto::-webkit-scrollbar,
+  .overflow-x-scroll::-webkit-scrollbar,
+  [class*="overflow-x-"]::-webkit-scrollbar {
+    height: 0px !important;
+    width: 0px !important;
+    display: none !important;
+    background: transparent !important;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-thumb,
+  .overflow-x-scroll::-webkit-scrollbar-thumb,
+  [class*="overflow-x-"]::-webkit-scrollbar-thumb {
+    display: none !important;
+    background: transparent !important;
+  }
+}
+
+/* Reusable utilities for scrollbar suppression */
+.no-scrollbar-x {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar-x::-webkit-scrollbar:horizontal,
+.no-scrollbar-x::-webkit-scrollbar {
+  display: none !important;
+  height: 0px !important;
+  width: 0px !important;
+}
+
+.no-scrollbar {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  height: 0px !important;
+  width: 0px !important;
 }
 
 /* Jalali Datepicker Theme & High Z-Index */

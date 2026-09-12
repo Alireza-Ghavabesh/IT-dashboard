@@ -1008,7 +1008,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#F5F5F0] text-[#2D2C28] selection:bg-[#545D4B] selection:text-white" dir="rtl">
+    <div className="min-h-screen flex flex-col bg-[#F5F5F0] text-[#2D2C28] selection:bg-[#545D4B] selection:text-white max-w-full overflow-x-hidden" dir="rtl">
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}

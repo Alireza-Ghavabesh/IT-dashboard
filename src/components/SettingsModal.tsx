@@ -808,29 +808,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto animate-in fade-in duration-200">
       <div
-        className="bg-[#FAFAF7] w-full max-w-5xl rounded-3xl border border-[#DDDBCF] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-[#FAFAF7] w-full max-w-5xl rounded-2xl sm:rounded-3xl border border-[#DDDBCF] shadow-2xl overflow-hidden flex flex-col max-h-[95dvh] sm:max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#E2E0D8] bg-white sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]">
-              <Settings className="h-5 w-5" />
+        <div className="flex items-center justify-between px-3.5 py-3 sm:px-6 sm:py-4 border-b border-[#E2E0D8] bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF] shrink-0">
+              <Settings className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-extrabold text-[#2D2C28]">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-sm sm:text-base font-extrabold text-[#2D2C28] truncate">
                   تنظیمات پیشرفته و قوانین آماری سامانه
                 </h2>
                 {excludedLetters.length > 0 && (
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FAECE8] text-[#9C3A27] border border-[#F2D1CA]">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-[#FAECE8] text-[#9C3A27] border border-[#F2D1CA] whitespace-nowrap">
                     {formatNumber(excludedLetters.length)} نامه مستثنی‌شده
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[#75746E]">
+              <p className="text-[11px] sm:text-xs text-[#75746E] truncate hidden sm:block">
                 فیلتر کلمات تستی، نادیده‌گیری از محاسبات، و تنظیم موتور قوانین منشأ درخواست‌ها
               </p>
             </div>
@@ -838,25 +838,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-[#75746E] hover:text-[#2D2C28] hover:bg-[#EFEFEA] transition cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-xl text-[#75746E] hover:text-[#2D2C28] hover:bg-[#EFEFEA] transition cursor-pointer shrink-0 mr-1"
+            title="بستن پنجره"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Tab Navigation Header */}
-        <div className="flex items-center gap-2 px-6 py-3 bg-[#F2F1EB] border-b border-[#E2E0D8]">
+        {/* Tab Navigation Header (Scrollable on mobile) */}
+        <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 bg-[#F2F1EB] border-b border-[#E2E0D8] overflow-x-auto no-scrollbar scroll-smooth flex-nowrap">
           <button
+            type="button"
             onClick={() => setActiveTab('exclusions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'exclusions'
                 ? 'bg-white text-[#9C3A27] shadow-xs border border-[#E2E0D8]'
                 : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
             }`}
           >
-            <FilterX className="h-4 w-4" />
-            <span>قوانین استثنا و نادیده‌گیری (کلمات تستی)</span>
-            <span className={`px-2 py-0.2 rounded-full text-[10px] ${
+            <FilterX className="h-4 w-4 shrink-0" />
+            <span className="sm:hidden">قوانین استثنا</span>
+            <span className="hidden sm:inline">قوانین استثنا و نادیده‌گیری (کلمات تستی)</span>
+            <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
               activeTab === 'exclusions' ? 'bg-[#FAECE8] text-[#9C3A27]' : 'bg-[#DDDBCF] text-[#5A5852]'
             }`}>
               {formatNumber(exclusionRules.length)}
@@ -864,16 +867,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('causes')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'causes'
                 ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
                 : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
             }`}
           >
-            <Sparkles className="h-4 w-4" />
-            <span>موتور قوانین تعیین عامل (منشأ درخواست)</span>
-            <span className={`px-2 py-0.2 rounded-full text-[10px] ${
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span className="sm:hidden">موتور قوانین عامل</span>
+            <span className="hidden sm:inline">موتور قوانین تعیین عامل (منشأ درخواست)</span>
+            <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
               activeTab === 'causes' ? 'bg-[#EFF6FF] text-[#1E40AF]' : 'bg-[#DDDBCF] text-[#5A5852]'
             }`}>
               {formatNumber(causeRules.length)}
@@ -881,32 +886,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('system')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'system'
                 ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
                 : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
             }`}
           >
-            <Sparkles className="h-4 w-4 text-[#2563EB]" />
-            <span>تنظیمات هوش مصنوعی و سیستم</span>
+            <SlidersHorizontal className="h-4 w-4 text-[#2563EB] shrink-0" />
+            <span className="sm:hidden">تنظیمات سیستم و AI</span>
+            <span className="hidden sm:inline">تنظیمات هوش مصنوعی و سیستم</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
               activeTab === 'backup'
                 ? 'bg-white text-[#446347] shadow-xs border border-[#E2E0D8]'
                 : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
             }`}
           >
-            <Archive className="h-4 w-4 text-[#446347]" />
-            <span>پشتیبان‌گیری و بازیابی (Backup & Restore)</span>
+            <Archive className="h-4 w-4 text-[#446347] shrink-0" />
+            <span className="sm:hidden">پشتیبان‌گیری و بازیابی</span>
+            <span className="hidden sm:inline">پشتیبان‌گیری و بازیابی (Backup & Restore)</span>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 overflow-y-auto space-y-6 flex-1">
+        <div className="p-3.5 sm:p-6 overflow-y-auto overflow-x-hidden space-y-4 sm:space-y-6 flex-1 min-w-0">
           {/* ======================================================== */}
           {/* TAB 1: EXCLUSION RULES (فیلتر کلمات تستی و استثناها)       */}
           {/* ======================================================== */}
@@ -1078,7 +1087,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setExField('all')}
-                        className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border flex flex-col items-center gap-1 ${
+                        className={`col-span-2 sm:col-span-1 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border flex flex-col items-center gap-1 ${
                           exField === 'all'
                             ? 'bg-[#9C3A27] text-white border-[#9C3A27] shadow-xs'
                             : 'bg-[#FAF9F5] text-[#5A5852] border-[#E2E0D8] hover:bg-[#F0EEE6]'
@@ -1279,11 +1288,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   {/* Submit Button */}
-                  <div className="flex items-center justify-end gap-2 pt-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-2">
                     <button
                       type="submit"
                       disabled={isSubmittingEx || !exKeyword.trim()}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#9C3A27] hover:bg-[#8A2E1D] rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 text-xs font-bold text-white bg-[#9C3A27] hover:bg-[#8A2E1D] rounded-xl shadow-xs transition active:scale-95 disabled:opacity-50 cursor-pointer"
                     >
                       <Check className="h-4 w-4" />
                       <span>{editingExclusionId ? 'بروزرسانی قانون' : 'ثبت و اعمال قانون استثنا'}</span>
@@ -1294,7 +1303,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               {/* Live Simulator for Exclusions */}
               <div className="bg-[#FAF9F5] rounded-2xl p-4 border border-[#E2E0D8] space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                   <div className="flex items-center gap-2">
                     <SlidersHorizontal className="h-4 w-4 text-[#75746E]" />
                     <h3 className="text-xs font-bold text-[#2D2C28]">
@@ -1302,7 +1311,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </h3>
                   </div>
                   <span className="text-[11px] text-[#75746E]">
-                    مقادیر نمونه را تغییر دهید تا ببینید آیا نامه از آمار حذف می‌شود یا خیر
+                    تست لحظه‌ای حذف یا شمول نامه در محاسبات
                   </span>
                 </div>
 
@@ -1356,7 +1365,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 {/* Simulation Output Card */}
-                <div className={`p-3 rounded-xl border flex items-center justify-between text-xs transition ${
+                <div className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs transition ${
                   liveExclusionResult.isExcluded
                     ? 'bg-[#FAECE8] text-[#8A2E1D] border-[#F2D1CA]'
                     : 'bg-[#EBF5EC] text-[#24592B] border-[#D1EBD4]'
@@ -1395,22 +1404,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
                       <Search className="h-3.5 w-3.5 absolute right-3 top-2.5 text-[#75746E]" />
                       <input
                         type="text"
                         value={exSearch}
                         onChange={e => setExSearch(e.target.value)}
                         placeholder="جستجو در قوانین..."
-                        className="pr-8 pl-3 py-1.5 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:bg-white focus:outline-none"
+                        className="w-full sm:w-auto pr-8 pl-3 py-1.5 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:bg-white focus:outline-none"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={onResetExclusions}
                       title="بازنشانی به قوانین پیش‌فرض (تست، آزمایشی، test)"
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-[#5A5852] bg-[#F5F5F0] hover:bg-[#EAE8DE] rounded-xl border border-[#DDDBCF] transition cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-[#5A5852] bg-[#F5F5F0] hover:bg-[#EAE8DE] rounded-xl border border-[#DDDBCF] transition cursor-pointer shrink-0"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       <span>پیش‌فرض</span>
@@ -1768,11 +1777,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-white border border-[#E2E0D8] flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full" style={{ backgroundColor: liveCauseResult.color }} />
+                <div className="p-3 rounded-xl bg-white border border-[#E2E0D8] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: liveCauseResult.color }} />
                     <span className="font-bold text-[#2D2C28]">عامل تشخیص داده شده:</span>
-                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold text-white" style={{ backgroundColor: liveCauseResult.color }}>
+                    <span className="px-2.5 py-0.5 rounded-lg text-xs font-extrabold text-white shrink-0" style={{ backgroundColor: liveCauseResult.color }}>
                       {liveCauseResult.cause}
                     </span>
                   </div>
@@ -1789,22 +1798,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </h3>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:flex-none">
                       <Search className="h-3.5 w-3.5 absolute right-3 top-2.5 text-[#75746E]" />
                       <input
                         type="text"
                         value={cSearch}
                         onChange={e => setCSearch(e.target.value)}
                         placeholder="جستجو در قوانین..."
-                        className="pr-8 pl-3 py-1.5 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:bg-white focus:outline-none"
+                        className="w-full sm:w-auto pr-8 pl-3 py-1.5 text-xs bg-[#FAF9F5] border border-[#DDDBCF] rounded-xl text-[#2D2C28] focus:bg-white focus:outline-none"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={onResetCauseRules}
                       title="بازنشانی قوانین پیش‌فرض بانکی"
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-[#5A5852] bg-[#F5F5F0] hover:bg-[#EAE8DE] rounded-xl border border-[#DDDBCF] transition cursor-pointer"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-[#5A5852] bg-[#F5F5F0] hover:bg-[#EAE8DE] rounded-xl border border-[#DDDBCF] transition cursor-pointer shrink-0"
                     >
                       <RotateCcw className="h-3.5 w-3.5" />
                       <span>پیش‌فرض</span>
@@ -1898,7 +1907,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       type="button"
                       onClick={handleAddAllUnitsToVisibility}
@@ -2040,9 +2049,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     پس از افزودن یا حذف واحدهای مورد نظر، دکمه <strong>«ذخیره تغییرات»</strong> را بزنید تا در پایگاه داده ثبت گردد.
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                     {visibilitySavedFeedback && (
-                      <span className="flex items-center gap-1.5 text-xs font-bold text-[#166534] bg-[#E1F3E2] px-3 py-1.5 rounded-xl border border-[#C2E0C4] animate-in fade-in">
+                      <span className="flex items-center justify-center gap-1.5 text-xs font-bold text-[#166534] bg-[#E1F3E2] px-3 py-1.5 rounded-xl border border-[#C2E0C4] animate-in fade-in">
                         <Check className="h-4 w-4 text-[#16A34A]" />
                         <span>تنظیمات با موفقیت ذخیره شد</span>
                       </span>
@@ -2052,7 +2061,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       type="button"
                       disabled={isSavingVisibility}
                       onClick={handleSaveVisibility}
-                      className="flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#16A34A] hover:bg-[#15803D] disabled:opacity-50 rounded-xl shadow-xs transition cursor-pointer shrink-0"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-[#16A34A] hover:bg-[#15803D] disabled:opacity-50 rounded-xl shadow-xs transition cursor-pointer shrink-0"
                     >
                       <Save className="h-4 w-4" />
                       <span>{isSavingVisibility ? 'در حال ذخیره...' : 'ذخیره تنظیمات در پایگاه داده'}</span>
@@ -3401,15 +3410,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </div>
 
               {/* Card 3: Persistence & Mobility Technical Info */}
-              <div className="bg-white rounded-2xl p-4.5 border border-[#E2E0D8] shadow-xs text-xs text-[#5A5852] flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <Database className="h-5 w-5 text-[#4B5344]" />
+              <div className="bg-white rounded-2xl p-4 sm:p-4.5 border border-[#E2E0D8] shadow-xs text-xs text-[#5A5852] flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-start sm:items-center gap-3">
+                  <Database className="h-5 w-5 text-[#4B5344] shrink-0 mt-0.5 sm:mt-0" />
                   <div>
                     <span className="font-bold text-[#2D2C28]">پایگاه داده پایدار SQLite و سازگاری بین‌سیستمی: </span>
                     <span>فایل خروجی تولیدشده ساختار استاندارد JSON دارد و با هر نمونه‌ای از سامانه سازگار است.</span>
                   </div>
                 </div>
-                <div className="text-[11px] text-[#047857] font-bold shrink-0 bg-[#ECFDF5] px-3 py-1.5 rounded-xl border border-[#A7F3D0]">
+                <div className="text-[11px] text-[#047857] font-bold shrink-0 bg-[#ECFDF5] px-3 py-1.5 rounded-xl border border-[#A7F3D0] self-start sm:self-auto">
                   سازگار با تمام مرورگرها و سرورها
                 </div>
               </div>
@@ -3418,13 +3427,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-[#E2E0D8] bg-white sticky bottom-0 z-10">
-          <div className="text-xs text-[#75746E]">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-[#E2E0D8] bg-white sticky bottom-0 z-10">
+          <div className="text-xs text-[#75746E] text-center sm:text-right">
             تغییر قوانین بلافاصله در محاسبات آماری، نمودارها و جداول اعمال می‌گردد.
           </div>
           <button
             onClick={onClose}
-            className="px-5 py-2 text-xs font-bold text-white bg-[#545D4B] hover:bg-[#434A3C] rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+            className="w-full sm:w-auto px-5 py-2.5 sm:py-2 text-xs font-bold text-white bg-[#545D4B] hover:bg-[#434A3C] rounded-xl shadow-xs transition active:scale-95 cursor-pointer text-center"
           >
             بستن پنجره
           </button>

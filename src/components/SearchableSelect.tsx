@@ -248,7 +248,7 @@ export const SearchableSelect: React.FC<SearchableSelectProps> = ({
 
       {/* Floating Searchable Menu */}
       {isOpen && (
-        <div className="absolute z-50 mt-1 w-full min-w-[240px] bg-white rounded-xl shadow-xl border border-[#DDDBCF] overflow-hidden animate-in fade-in zoom-in-95 duration-100 right-0">
+        <div className="absolute z-50 mt-1 w-full min-w-[200px] sm:min-w-[240px] max-w-[calc(100vw-2.5rem)] bg-white rounded-xl shadow-xl border border-[#DDDBCF] overflow-hidden animate-in fade-in zoom-in-95 duration-100 right-0">
           {/* Search Box Header */}
           <div className="p-2 border-b border-[#E8E6DF] bg-[#FAF9F5]">
             <div className="relative flex items-center">

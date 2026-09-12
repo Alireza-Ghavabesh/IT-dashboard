@@ -990,10 +990,10 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-[#FAFAF7] rounded-2xl p-4 border border-[#E2E0D8] shadow-xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-3 flex-1 min-w-[280px]">
+      <div className="bg-[#FAFAF7] rounded-2xl p-3.5 sm:p-4 border border-[#E2E0D8] shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 w-full min-w-0">
           {/* Search Box */}
-          <div className="relative flex-1">
+          <div className="relative flex-1 min-w-[200px] w-full sm:w-auto">
             <Search className="absolute right-3 top-2.5 h-4 w-4 text-[#8A8880]" />
             <input
               type="text"
@@ -1014,12 +1014,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           </div>
 
           {/* Unit Filter */}
-          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF]">
-            <Building2 className="h-3.5 w-3.5 text-[#75746E]" />
+          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF] max-w-full">
+            <Building2 className="h-3.5 w-3.5 text-[#75746E] shrink-0" />
             <select
               value={selectedUnit}
               onChange={e => setSelectedUnit(e.target.value)}
-              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer max-w-[170px] sm:max-w-none truncate"
             >
               <option value="all">تمام واحدها ({allUnits.length})</option>
               {allUnits.map(unit => (
@@ -1031,12 +1031,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           </div>
 
           {/* Entity Type Filter */}
-          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF]">
-            <Tag className="h-3.5 w-3.5 text-[#75746E]" />
+          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF] max-w-full">
+            <Tag className="h-3.5 w-3.5 text-[#75746E] shrink-0" />
             <select
               value={selectedEntityType}
               onChange={e => setSelectedEntityType(e.target.value)}
-              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer truncate"
             >
               <option value="all">تمام موجودیت‌ها</option>
               <option value="فرآیند">فرآیند ({processesEntityCount})</option>
@@ -1046,12 +1046,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           </div>
 
           {/* Operation Type Filter */}
-          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF]">
-            <Filter className="h-3.5 w-3.5 text-[#75746E]" />
+          <div className="flex items-center gap-1.5 bg-[#F5F5F0] px-2.5 py-1.5 rounded-xl border border-[#DDDBCF] max-w-full">
+            <Filter className="h-3.5 w-3.5 text-[#75746E] shrink-0" />
             <select
               value={selectedOpType}
               onChange={e => setSelectedOpType(e.target.value)}
-              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer"
+              className="bg-transparent text-xs text-[#2D2C28] font-bold focus:outline-none cursor-pointer truncate"
             >
               <option value="all">تمام عملیات‌ها</option>
               <option value="جدید">جدید / ایجاد فرم ({newFormsCount})</option>
@@ -1062,9 +1062,9 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
           {/* Active Date Filter Chip */}
           {(startDate || endDate) && (
-            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-2.5 py-1.5 rounded-xl border border-emerald-300 text-xs font-bold shadow-2xs">
-              <Calendar className="h-3.5 w-3.5 text-emerald-600" />
-              <span>
+            <div className="flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-2.5 py-1.5 rounded-xl border border-emerald-300 text-xs font-bold shadow-2xs max-w-full">
+              <Calendar className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+              <span className="truncate">
                 تاریخ: {startDate ? startDate : 'ابتدا'} تا {endDate ? endDate : 'انتها'}
               </span>
               <button
@@ -1075,7 +1075,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                   setTempStartDate('');
                   setTempEndDate('');
                 }}
-                className="hover:bg-emerald-200 p-0.5 rounded text-emerald-700 transition cursor-pointer"
+                className="hover:bg-emerald-200 p-0.5 rounded text-emerald-700 transition cursor-pointer shrink-0"
                 title="حذف فیلتر محدوده تاریخ"
               >
                 <X className="h-3 w-3" />
@@ -1085,7 +1085,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         </div>
 
         {/* Quick Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full md:w-auto justify-start md:justify-end">
           {activeFiltersCount > 0 && (
             <button
               type="button"
@@ -1125,7 +1125,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
               <span>مبنای نمودارها:</span>
             </div>
 
-            <div className="flex items-center bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF] gap-1 self-start sm:self-auto">
+            <div className="flex items-center flex-wrap bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF] gap-1 self-start sm:self-auto max-w-full">
               <button
                 type="button"
                 onClick={() => handleChartGroupByChange('operation')}
@@ -1136,7 +1136,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 }`}
               >
                 <Filter className="h-3.5 w-3.5 text-[#545D4B]" />
-                <span>نوع عملیات (جدید / اصلاح / اتوماتیک)</span>
+                <span>نوع عملیات <span className="hidden sm:inline">(جدید / اصلاح / اتوماتیک)</span></span>
               </button>
               <button
                 type="button"
@@ -1148,7 +1148,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 }`}
               >
                 <Tag className="h-3.5 w-3.5 text-[#0284C7]" />
-                <span>نوع موجودیت (فرآیند / فرم / گزارش)</span>
+                <span>نوع موجودیت <span className="hidden sm:inline">(فرآیند / فرم / گزارش)</span></span>
               </button>
             </div>
           </div>
@@ -1244,7 +1244,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
               {/* Chart Date Range Popover */}
               {isChartDateFilterOpen && (
-                <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
                   {/* Popover Header */}
                   <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">

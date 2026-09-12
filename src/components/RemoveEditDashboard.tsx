@@ -1038,10 +1038,10 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
       </div>
 
       {/* Filter Toolbar */}
-      <div className="bg-[#FAFAF7] rounded-3xl p-5 border border-[#E2E0D8] shadow-xs">
-        <div className="flex items-center justify-between gap-2 border-b border-[#E8E6DF] pb-3 mb-4">
-          <div className="flex items-center gap-2 text-[#2D2C28] font-bold text-sm">
-            <SlidersHorizontal className="h-4 w-4 text-[#545D4B]" />
+      <div className="bg-[#FAFAF7] rounded-3xl p-3.5 sm:p-5 border border-[#E2E0D8] shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-[#E8E6DF] pb-3 mb-4">
+          <div className="flex items-center gap-2 text-[#2D2C28] font-bold text-sm flex-wrap">
+            <SlidersHorizontal className="h-4 w-4 text-[#545D4B] shrink-0" />
             <span>فیلتر و جستجوی پیشرفته</span>
             {showExcludedOnly && (
               <span className="bg-[#FAECE8] text-[#9C3A27] text-xs font-bold px-2 py-0.5 rounded-full border border-[#F2D1CA]">
@@ -1050,7 +1050,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {onOpenSettingsModal && (
               <button
                 onClick={onOpenSettingsModal}
@@ -1073,10 +1073,10 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           {/* Unit Filter (Multi-select) */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               واحد سازمانی (امکان انتخاب چندگانه):
             </label>
             <MultiSelectDropdown
@@ -1096,8 +1096,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
 
           {/* Cause Filter (عامل) */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               عامل (منشأ درخواست):
             </label>
             <select
@@ -1106,7 +1106,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                 setSelectedCause(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:bg-white transition font-bold"
+              className="w-full max-w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:bg-white transition font-bold truncate"
             >
               <option value="all">همه عامل‌ها ({allCauses.length} عامل)</option>
               {allCauses.map(c => (
@@ -1118,8 +1118,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
 
           {/* Month Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               ماه / دوره زمانی:
             </label>
             <select
@@ -1128,7 +1128,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                 setSelectedMonth(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition font-medium"
+              className="w-full max-w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition font-medium truncate"
             >
               <option value="all">همه ماه‌های سال</option>
               {allMonths.map(m => {
@@ -1143,8 +1143,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
 
           {/* Letter Type Filter */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               نوع نامه:
             </label>
             <select
@@ -1153,7 +1153,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                 setSelectedActionType(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition font-medium"
+              className="w-full max-w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition font-medium truncate"
             >
               <option value="all">همه انواع (حذف و ویرایش)</option>
               <option value="حذف">فقط نامه‌های حذف</option>
@@ -1162,8 +1162,8 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
 
           {/* Date Filter Trigger in Filter Panel */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               فیلتر تاریخ (شمسی):
             </label>
             <button
@@ -1177,7 +1177,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                   chartSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
               }}
-              className={`w-full flex items-center justify-between text-xs px-3 py-2 rounded-xl border font-bold transition cursor-pointer ${
+              className={`w-full max-w-full min-w-0 flex items-center justify-between text-xs px-3 py-2 rounded-xl border font-bold transition cursor-pointer ${
                 startDate || endDate
                   ? 'bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-300'
                   : 'bg-[#F5F5F0] text-[#2D2C28] border-[#DDDBCF] hover:bg-[#EFEFEA]'
@@ -1193,11 +1193,11 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           </div>
 
           {/* Search Query */}
-          <div>
-            <label className="block text-[11px] font-semibold text-[#75746E] mb-1">
+          <div className="min-w-0">
+            <label className="block text-[11px] font-semibold text-[#75746E] mb-1 truncate">
               جستجو در متن / عامل / شناسه:
             </label>
-            <div className="relative">
+            <div className="relative min-w-0">
               <Search className="absolute right-3 top-2.5 h-4 w-4 text-[#8A8880] pointer-events-none" />
               <input
                 type="text"
@@ -1207,7 +1207,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl pr-9 pl-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition"
+                className="w-full max-w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl pr-9 pl-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition"
               />
             </div>
           </div>
@@ -1215,7 +1215,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
 
         {/* Filter Summary Tags */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs pt-3 border-t border-[#E8E6DF]">
-          <div className="flex items-center gap-2 text-[#75746E] flex-wrap">
+          <div className="flex items-center gap-2 text-[#75746E] flex-wrap max-w-full">
             <span>نتایج یافت شده:</span>
             <span className="font-bold text-[#2D2C28] bg-[#EFEFEA] px-2 py-0.5 rounded-md border border-[#DDDBCF]">
               {formatNumber(filteredLetters.length)} نامه
@@ -1224,9 +1224,9 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
 
             {/* Date Range Active Badge */}
             {(startDate || endDate) && (
-              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg font-bold text-[11px]">
-                <CalendarRange className="w-3.5 h-3.5 text-emerald-700" />
-                <span>بازه تاریخی: {startDate || '...'} تا {endDate || '...'}</span>
+              <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 px-2.5 py-0.5 rounded-lg font-bold text-[11px] max-w-full truncate">
+                <CalendarRange className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <span className="truncate">بازه تاریخی: {startDate || '...'} تا {endDate || '...'}</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1235,7 +1235,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
                     setTempStartDate('');
                     setTempEndDate('');
                   }}
-                  className="hover:text-red-600 p-0.5 rounded cursor-pointer"
+                  className="hover:text-red-600 p-0.5 rounded cursor-pointer shrink-0"
                   title="حذف فیلتر تاریخ"
                 >
                   <X className="w-3 h-3" />
@@ -1245,7 +1245,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
 
             {/* If Unit is filtered, show quick 2-color breakdown pill in summary */}
             {selectedUnitStats && (
-              <div className="flex items-center gap-1.5 mr-2">
+              <div className="flex items-center gap-1.5 mr-0 sm:mr-2 flex-wrap">
                 <span className="text-[11px] font-extrabold bg-[#FEF2F2] text-[#991B1B] border border-[#FECACA] px-2.5 py-0.5 rounded-lg flex items-center gap-1">
                   <span className="w-2 h-2 rounded-full bg-[#DC2626]" />
                   حذف: {selectedUnitStats.deleteRate}% ({formatNumber(selectedUnitStats.deletes)})
@@ -1258,7 +1258,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
             )}
 
             {/* Quick Cause Badges Breakdown */}
-            <div className="flex items-center gap-1.5 mr-2">
+            <div className="flex items-center gap-1.5 mr-0 sm:mr-2 flex-wrap max-w-full">
               {filteredMetrics.causesDistribution.map(cd => (
                 <button
                   type="button"
@@ -1439,7 +1439,7 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
 
             {/* Date Filter Popover */}
             {isChartDateFilterOpen && (
-              <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+              <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
                 {/* Popover Header */}
                 <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
