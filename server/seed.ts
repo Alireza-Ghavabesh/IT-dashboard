@@ -31,6 +31,7 @@ export async function seedDatabase(force = false) {
           cause: rule.cause,
           targetUnit: rule.targetUnit || null,
           matchType: rule.matchType || 'contains',
+          targetField: (rule as any).targetField || 'all',
           isActive: rule.isActive !== false,
           color: rule.color || '#2563EB',
           description: rule.description || null,

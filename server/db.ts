@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS "CauseRule" (
     "cause" TEXT NOT NULL,
     "targetUnit" TEXT,
     "matchType" TEXT NOT NULL DEFAULT 'contains',
+    "targetField" TEXT DEFAULT 'all',
     "isActive" BOOLEAN NOT NULL DEFAULT 1,
     "color" TEXT DEFAULT '#2563EB',
     "description" TEXT,
@@ -139,6 +140,11 @@ export async function ensureDatabaseHealthy(): Promise<void> {
     // Proactively ensure entityType column exists in EraProcess
     await prisma.$executeRawUnsafe(`ALTER TABLE "EraProcess" ADD COLUMN "entityType" TEXT DEFAULT 'فرآیند';`).catch(() => {});
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EraProcess_entityType_idx" ON "EraProcess"("entityType");`).catch(() => {});
+
+    // Proactively ensure targetField and other newer columns exist in CauseRule
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "targetField" TEXT DEFAULT 'all';`).catch(() => {});
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "color" TEXT DEFAULT '#2563EB';`).catch(() => {});
+    await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "priority" INTEGER DEFAULT 0;`).catch(() => {});
   } catch (error: any) {
     console.warn('Database health check encountered error:', error?.message || error);
     const isCorrupt = error?.message?.includes('SQLITE_CORRUPT') ||
