@@ -158,6 +158,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('era_visibility_settings', JSON.stringify(next));
       }
+      api.saveSetting('era_visibility_settings', next).catch(() => {});
       return next;
     });
   };
@@ -175,6 +176,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('era_visibility_settings', JSON.stringify(next));
       }
+      api.saveSetting('era_visibility_settings', next).catch(() => {});
       return next;
     });
   };
@@ -202,6 +204,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('era_visibility_settings', JSON.stringify(next));
       }
+      api.saveSetting('era_visibility_settings', next).catch(() => {});
       return next;
     });
   };
@@ -215,6 +218,7 @@ export default function App() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('era_visibility_settings', JSON.stringify(next));
       }
+      api.saveSetting('era_visibility_settings', next).catch(() => {});
       return next;
     });
   };
@@ -224,6 +228,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('show_floating_ai_button', String(val));
     }
+    api.saveSetting('show_floating_ai_button', val).catch(() => {});
     showToast(
       val
         ? 'دستیار هوش مصنوعی فعال شد (دکمه هدر و دکمه گوشه صفحه نمایان شدند).'
@@ -236,6 +241,7 @@ export default function App() {
     if (typeof window !== 'undefined') {
       localStorage.setItem('ai_bi_debug_mode', String(val));
     }
+    api.saveSetting('ai_bi_debug_mode', val).catch(() => {});
     showToast(
       val
         ? 'حالت دیباگ هوش مصنوعی فعال شد (کوئری‌های SQL نمایش داده می‌شوند).'
@@ -308,6 +314,22 @@ export default function App() {
       }
       if (settingsRecord.filter_execution_mode === 'server' || settingsRecord.filter_execution_mode === 'client') {
         setFilterExecutionMode(settingsRecord.filter_execution_mode);
+      }
+      if (settingsRecord.era_visibility_settings) {
+        setEraVisibility(prev => ({
+          ...prev,
+          ...settingsRecord.era_visibility_settings,
+          columnVisibility: {
+            ...prev.columnVisibility,
+            ...(settingsRecord.era_visibility_settings.columnVisibility || {})
+          }
+        }));
+      }
+      if (settingsRecord.show_floating_ai_button !== undefined) {
+        setShowFloatingAiButton(Boolean(settingsRecord.show_floating_ai_button));
+      }
+      if (settingsRecord.ai_bi_debug_mode !== undefined) {
+        setAiDebugMode(Boolean(settingsRecord.ai_bi_debug_mode));
       }
       if (health) {
         setDbHealth(health);

@@ -137,6 +137,43 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [filterYear, setFilterYear] = useState<string>('');
   const dateFilterRef = useRef<HTMLTableHeaderCellElement>(null);
   const chartDateFilterRef = useRef<HTMLDivElement>(null);
+  const chartDatePopoverRef = useRef<HTMLDivElement>(null);
+  const tableDatePopoverRef = useRef<HTMLDivElement>(null);
+
+  // Keep date popovers strictly within viewport boundaries (prevent overflowing off-screen on full screen / mobile)
+  useEffect(() => {
+    if (!isChartDateFilterOpen && !isDateFilterOpen) return;
+
+    const adjustPopover = (el: HTMLElement | null) => {
+      if (!el) return;
+      el.style.transform = '';
+      const rect = el.getBoundingClientRect();
+      const margin = 12;
+      if (rect.left < margin) {
+        const shift = Math.ceil(margin - rect.left);
+        el.style.transform = `translateX(${shift}px)`;
+      } else if (rect.right > window.innerWidth - margin) {
+        const shift = Math.floor((window.innerWidth - margin) - rect.right);
+        el.style.transform = `translateX(${shift}px)`;
+      }
+    };
+
+    const timer = setTimeout(() => {
+      if (isChartDateFilterOpen) adjustPopover(chartDatePopoverRef.current);
+      if (isDateFilterOpen) adjustPopover(tableDatePopoverRef.current);
+    }, 10);
+
+    const handleResize = () => {
+      if (isChartDateFilterOpen) adjustPopover(chartDatePopoverRef.current);
+      if (isDateFilterOpen) adjustPopover(tableDatePopoverRef.current);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isChartDateFilterOpen, isDateFilterOpen]);
   const curJalali = useMemo(() => getCurrentJalaliDate(), []);
   const [chartGroupBy, setChartGroupBy] = useState<'operation' | 'entity'>(() => {
     if (typeof window !== 'undefined') {
@@ -1244,7 +1281,10 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
               {/* Chart Date Range Popover */}
               {isChartDateFilterOpen && (
-                <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                <div
+                  ref={chartDatePopoverRef}
+                  className="absolute z-50 top-full mt-2 left-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+                >
                   {/* Popover Header */}
                   <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
@@ -1953,17 +1993,6 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 <span>حذف تمام فیلترها</span>
               </button>
             )}
-            {onOpenSettingsModal && (
-              <button
-                type="button"
-                onClick={onOpenSettingsModal}
-                className="flex items-center gap-1 text-xs text-[#545D4B] hover:text-[#2D2C28] font-bold px-2.5 py-1.5 rounded-xl bg-white border border-[#DDDBCF] hover:bg-[#EFEFEA] transition cursor-pointer shadow-2xs"
-                title="مدیریت نمایش/عدم نمایش ستون‌های جدول فرآیندها"
-              >
-                <Sliders className="h-3.5 w-3.5 text-[#545D4B]" />
-                <span>تنظیم ستون‌ها</span>
-              </button>
-            )}
             <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-xl border border-blue-200">
               {formatNumber(slideSelectedCount)} اسلاید آماده ارائه
             </span>
@@ -2175,7 +2204,10 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
                   {/* Date Range Popover */}
                   {isDateFilterOpen && (
-                    <div className="absolute z-50 top-full mt-1.5 right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+                    <div
+                      ref={tableDatePopoverRef}
+                      className="absolute z-50 top-full mt-1.5 right-0 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+                    >
                       <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
                         <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
                           <CalendarRange className="h-4 w-4 text-[#545D4B]" />

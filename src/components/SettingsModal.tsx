@@ -24,6 +24,8 @@ import {
   FileSpreadsheet,
   Save,
   ChevronDown,
+  ChevronRight,
+  ChevronLeft,
   Terminal,
   Bug,
   Code,
@@ -159,6 +161,168 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setActiveTab(initialTab);
     }
   }, [isOpen, initialTab]);
+
+  // --- Tab Navigation Drag, Wheel & Scroll State for Desktop & Mobile ---
+  const tabsNavRef = useRef<HTMLDivElement>(null);
+  const [isDraggingTabs, setIsDraggingTabs] = useState<boolean>(false);
+  const isDraggingTabsRef = useRef<boolean>(false);
+  const startXRef = useRef<number>(0);
+  const scrollLeftStartRef = useRef<number>(0);
+  const hasMovedRef = useRef<boolean>(false);
+  const rtlTypeRef = useRef<'negative' | 'positive'>('negative');
+  const [canScrollRight, setCanScrollRight] = useState<boolean>(false);
+  const [canScrollLeft, setCanScrollLeft] = useState<boolean>(false);
+
+  // Check scroll boundaries to show/hide navigation arrows on overflow
+  const updateTabScrollIndicators = () => {
+    const el = tabsNavRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 4) {
+      setCanScrollRight(false);
+      setCanScrollLeft(false);
+      return;
+    }
+    const absScroll = Math.abs(el.scrollLeft);
+    if (rtlTypeRef.current === 'negative') {
+      setCanScrollRight(el.scrollLeft < -4);
+      setCanScrollLeft(absScroll < maxScroll - 4);
+    } else {
+      setCanScrollRight(el.scrollLeft > 4);
+      setCanScrollLeft(el.scrollLeft < maxScroll - 4);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    try {
+      const testDiv = document.createElement('div');
+      testDiv.dir = 'rtl';
+      testDiv.style.position = 'absolute';
+      testDiv.style.top = '-9999px';
+      testDiv.style.width = '4px';
+      testDiv.style.height = '4px';
+      testDiv.style.overflow = 'scroll';
+      testDiv.innerHTML = '<div style="width: 20px; height: 1px;"></div>';
+      document.body.appendChild(testDiv);
+      if (testDiv.scrollLeft > 0) {
+        rtlTypeRef.current = 'positive';
+      } else {
+        testDiv.scrollLeft = -1;
+        rtlTypeRef.current = testDiv.scrollLeft < 0 ? 'negative' : 'positive';
+      }
+      document.body.removeChild(testDiv);
+    } catch {
+      rtlTypeRef.current = 'negative';
+    }
+
+    const timer = setTimeout(updateTabScrollIndicators, 120);
+    return () => clearTimeout(timer);
+  }, [isOpen, activeTab]);
+
+  useEffect(() => {
+    const el = tabsNavRef.current;
+    if (!el || !isOpen) return;
+
+    const handleScroll = () => updateTabScrollIndicators();
+    const handleResize = () => updateTabScrollIndicators();
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+
+    // Allow horizontal scrolling via vertical mouse wheel
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY !== 0 && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        if (rtlTypeRef.current === 'negative') {
+          el.scrollLeft -= e.deltaY;
+        } else {
+          el.scrollLeft += e.deltaY;
+        }
+      }
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+
+    const handleGlobalMouseUp = () => {
+      if (isDraggingTabsRef.current) {
+        isDraggingTabsRef.current = false;
+        setIsDraggingTabs(false);
+        setTimeout(() => {
+          hasMovedRef.current = false;
+        }, 80);
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+      el.removeEventListener('wheel', handleWheel);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [isOpen]);
+
+  const handleMouseDownTabs = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const el = tabsNavRef.current;
+    if (!el) return;
+    isDraggingTabsRef.current = true;
+    setIsDraggingTabs(true);
+    startXRef.current = e.pageX;
+    scrollLeftStartRef.current = el.scrollLeft;
+    hasMovedRef.current = false;
+  };
+
+  const handleMouseMoveTabs = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isDraggingTabsRef.current || !tabsNavRef.current) return;
+    const deltaX = e.pageX - startXRef.current;
+    if (Math.abs(deltaX) > 3) {
+      hasMovedRef.current = true;
+    }
+    const el = tabsNavRef.current;
+    if (rtlTypeRef.current === 'negative') {
+      el.scrollLeft = scrollLeftStartRef.current + deltaX;
+    } else {
+      el.scrollLeft = scrollLeftStartRef.current - deltaX;
+    }
+  };
+
+  const handleMouseUpTabs = () => {
+    if (isDraggingTabsRef.current) {
+      isDraggingTabsRef.current = false;
+      setIsDraggingTabs(false);
+      setTimeout(() => {
+        hasMovedRef.current = false;
+      }, 80);
+    }
+  };
+
+  const scrollTabsDirection = (dir: 'right' | 'left') => {
+    const el = tabsNavRef.current;
+    if (!el) return;
+    const distance = 180;
+    if (dir === 'right') {
+      if (rtlTypeRef.current === 'negative') {
+        el.scrollTo({ left: Math.min(0, el.scrollLeft + distance), behavior: 'smooth' });
+      } else {
+        el.scrollTo({ left: Math.max(0, el.scrollLeft - distance), behavior: 'smooth' });
+      }
+    } else {
+      if (rtlTypeRef.current === 'negative') {
+        el.scrollTo({ left: el.scrollLeft - distance, behavior: 'smooth' });
+      } else {
+        el.scrollTo({ left: el.scrollLeft + distance, behavior: 'smooth' });
+      }
+    }
+  };
+
+  const handleTabClick = (tabKey: 'exclusions' | 'causes' | 'system' | 'backup', e: React.MouseEvent) => {
+    if (hasMovedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    setActiveTab(tabKey);
+  };
 
   // --- Gemini API Key Configuration State ---
   const [apiKeyInput, setApiKeyInput] = useState<string>('');
@@ -845,73 +1009,115 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Navigation Header (Scrollable on mobile) */}
-        <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 bg-[#F2F1EB] border-b border-[#E2E0D8] overflow-x-auto no-scrollbar scroll-smooth flex-nowrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab('exclusions')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-              activeTab === 'exclusions'
-                ? 'bg-white text-[#9C3A27] shadow-xs border border-[#E2E0D8]'
-                : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
-            }`}
-          >
-            <FilterX className="h-4 w-4 shrink-0" />
-            <span className="sm:hidden">قوانین استثنا</span>
-            <span className="hidden sm:inline">قوانین استثنا و نادیده‌گیری (کلمات تستی)</span>
-            <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
-              activeTab === 'exclusions' ? 'bg-[#FAECE8] text-[#9C3A27]' : 'bg-[#DDDBCF] text-[#5A5852]'
-            }`}>
-              {formatNumber(exclusionRules.length)}
-            </span>
-          </button>
+        {/* Tab Navigation Header (Smooth touch swipe on mobile + Mouse drag & wheel scrolling on desktop) */}
+        <div className="relative bg-[#F2F1EB] border-b border-[#E2E0D8] select-none">
+          {/* Right Arrow (RTL: Scroll back to initial tabs) */}
+          {canScrollRight && (
+            <button
+              type="button"
+              onClick={() => scrollTabsDirection('right')}
+              className="hidden md:flex absolute right-1.5 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/95 hover:bg-white text-[#2D2C28] shadow-sm border border-[#DDDBCF] items-center justify-center cursor-pointer transition hover:scale-105 active:scale-95"
+              title="مشاهده تب‌های قبلی"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('causes')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-              activeTab === 'causes'
-                ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
-                : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
-            }`}
-          >
-            <Sparkles className="h-4 w-4 shrink-0" />
-            <span className="sm:hidden">موتور قوانین عامل</span>
-            <span className="hidden sm:inline">موتور قوانین تعیین عامل (منشأ درخواست)</span>
-            <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
-              activeTab === 'causes' ? 'bg-[#EFF6FF] text-[#1E40AF]' : 'bg-[#DDDBCF] text-[#5A5852]'
-            }`}>
-              {formatNumber(causeRules.length)}
-            </span>
-          </button>
+          {/* Left Arrow (RTL: Scroll to next tabs) */}
+          {canScrollLeft && (
+            <button
+              type="button"
+              onClick={() => scrollTabsDirection('left')}
+              className="hidden md:flex absolute left-1.5 top-1/2 -translate-y-1/2 z-10 w-7 h-7 rounded-full bg-white/95 hover:bg-white text-[#2D2C28] shadow-sm border border-[#DDDBCF] items-center justify-center cursor-pointer transition hover:scale-105 active:scale-95"
+              title="مشاهده تب‌های بعدی"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('system')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-              activeTab === 'system'
-                ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
-                : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+          <div
+            ref={tabsNavRef}
+            onMouseDown={handleMouseDownTabs}
+            onMouseMove={handleMouseMoveTabs}
+            onMouseUp={handleMouseUpTabs}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-6 py-2 sm:py-3 overflow-x-auto no-scrollbar scroll-smooth flex-nowrap ${
+              isDraggingTabs ? 'cursor-grabbing' : 'cursor-grab'
             }`}
           >
-            <SlidersHorizontal className="h-4 w-4 text-[#2563EB] shrink-0" />
-            <span className="sm:hidden">تنظیمات سیستم و AI</span>
-            <span className="hidden sm:inline">تنظیمات هوش مصنوعی و سیستم</span>
-          </button>
+            <button
+              type="button"
+              onClick={(e) => handleTabClick('exclusions', e)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap select-none ${
+                isDraggingTabs ? 'cursor-grabbing' : 'cursor-pointer'
+              } ${
+                activeTab === 'exclusions'
+                  ? 'bg-white text-[#9C3A27] shadow-xs border border-[#E2E0D8]'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+              }`}
+            >
+              <FilterX className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">قوانین استثنا</span>
+              <span className="hidden sm:inline">قوانین استثنا و نادیده‌گیری (کلمات تستی)</span>
+              <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
+                activeTab === 'exclusions' ? 'bg-[#FAECE8] text-[#9C3A27]' : 'bg-[#DDDBCF] text-[#5A5852]'
+              }`}>
+                {formatNumber(exclusionRules.length)}
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('backup')}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 whitespace-nowrap ${
-              activeTab === 'backup'
-                ? 'bg-white text-[#446347] shadow-xs border border-[#E2E0D8]'
-                : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
-            }`}
-          >
-            <Archive className="h-4 w-4 text-[#446347] shrink-0" />
-            <span className="sm:hidden">پشتیبان‌گیری و بازیابی</span>
-            <span className="hidden sm:inline">پشتیبان‌گیری و بازیابی (Backup & Restore)</span>
-          </button>
+            <button
+              type="button"
+              onClick={(e) => handleTabClick('causes', e)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap select-none ${
+                isDraggingTabs ? 'cursor-grabbing' : 'cursor-pointer'
+              } ${
+                activeTab === 'causes'
+                  ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+              }`}
+            >
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span className="sm:hidden">موتور قوانین عامل</span>
+              <span className="hidden sm:inline">موتور قوانین تعیین عامل (منشأ درخواست)</span>
+              <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
+                activeTab === 'causes' ? 'bg-[#EFF6FF] text-[#1E40AF]' : 'bg-[#DDDBCF] text-[#5A5852]'
+              }`}>
+                {formatNumber(causeRules.length)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => handleTabClick('system', e)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap select-none ${
+                isDraggingTabs ? 'cursor-grabbing' : 'cursor-pointer'
+              } ${
+                activeTab === 'system'
+                  ? 'bg-white text-[#1E40AF] shadow-xs border border-[#E2E0D8]'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+              }`}
+            >
+              <SlidersHorizontal className="h-4 w-4 text-[#2563EB] shrink-0" />
+              <span className="sm:hidden">تنظیمات سیستم و AI</span>
+              <span className="hidden sm:inline">تنظیمات هوش مصنوعی و سیستم</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => handleTabClick('backup', e)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap select-none ${
+                isDraggingTabs ? 'cursor-grabbing' : 'cursor-pointer'
+              } ${
+                activeTab === 'backup'
+                  ? 'bg-white text-[#446347] shadow-xs border border-[#E2E0D8]'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+              }`}
+            >
+              <Archive className="h-4 w-4 text-[#446347] shrink-0" />
+              <span className="sm:hidden">پشتیبان‌گیری و بازیابی</span>
+              <span className="hidden sm:inline">پشتیبان‌گیری و بازیابی (Backup & Restore)</span>
+            </button>
+          </div>
         </div>
 
         {/* Modal Body */}

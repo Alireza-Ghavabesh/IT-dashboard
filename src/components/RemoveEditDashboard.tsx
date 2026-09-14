@@ -156,6 +156,34 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
   const [filterYear, setFilterYear] = useState<string>('');
   const [isChartDateFilterOpen, setIsChartDateFilterOpen] = useState<boolean>(false);
   const chartDateFilterRef = useRef<HTMLDivElement>(null);
+  const chartDatePopoverRef = useRef<HTMLDivElement>(null);
+
+  // Keep date popover strictly within viewport boundaries
+  useEffect(() => {
+    if (!isChartDateFilterOpen) return;
+
+    const adjustPopover = () => {
+      const el = chartDatePopoverRef.current;
+      if (!el) return;
+      el.style.transform = '';
+      const rect = el.getBoundingClientRect();
+      const margin = 12;
+      if (rect.left < margin) {
+        const shift = Math.ceil(margin - rect.left);
+        el.style.transform = `translateX(${shift}px)`;
+      } else if (rect.right > window.innerWidth - margin) {
+        const shift = Math.floor((window.innerWidth - margin) - rect.right);
+        el.style.transform = `translateX(${shift}px)`;
+      }
+    };
+
+    const timer = setTimeout(adjustPopover, 10);
+    window.addEventListener('resize', adjustPopover);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', adjustPopover);
+    };
+  }, [isChartDateFilterOpen]);
 
   // Pagination for detailed list
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -1439,7 +1467,10 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
 
             {/* Date Filter Popover */}
             {isChartDateFilterOpen && (
-              <div className="absolute z-50 top-full mt-2 left-0 sm:left-auto sm:right-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150">
+              <div
+                ref={chartDatePopoverRef}
+                className="absolute z-50 top-full mt-2 left-0 w-[calc(100vw-2.5rem)] max-w-xs sm:max-w-sm sm:w-80 bg-white rounded-3xl p-4 shadow-2xl border border-[#DDDBCF] text-right space-y-3.5 animate-in fade-in zoom-in-95 duration-150"
+              >
                 {/* Popover Header */}
                 <div className="flex items-center justify-between border-b border-[#E8E6DF] pb-2.5">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-[#2D2C28]">
