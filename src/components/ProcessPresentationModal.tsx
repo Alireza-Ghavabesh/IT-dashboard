@@ -46,6 +46,7 @@ import {
   PRESET_PROCESS_PRESENTATIONS
 } from '../data/presentationTemplates';
 import { api } from '../services/api';
+import { RichTextDisplay } from './RichTextDisplay';
 
 interface ProcessPresentationModalProps {
   isOpen: boolean;
@@ -687,7 +688,9 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
                       </div>
 
                       <div className="bg-white/80 rounded-2xl p-3.5 border border-rose-200 text-xs text-rose-950 leading-relaxed font-medium">
-                        {item.problemDescription?.trim() || presentation.beforeDescription}
+                        <RichTextDisplay
+                          content={item.problemDescription?.trim() || presentation.beforeDescription}
+                        />
                       </div>
 
                       {/* Pain Points List */}
@@ -733,7 +736,9 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
                       </div>
 
                       <div className="bg-white/80 rounded-2xl p-3.5 border border-emerald-200 text-xs text-emerald-950 leading-relaxed font-medium">
-                        {item.solutionDescription?.trim() || presentation.afterDescription}
+                        <RichTextDisplay
+                          content={item.solutionDescription?.trim() || presentation.afterDescription}
+                        />
                       </div>
 
                       {/* Improvements & Values List */}
@@ -840,7 +845,7 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
                   {item.problemDescription?.trim() ? (
                     <div className="bg-white/80 p-3 rounded-2xl border border-amber-200 text-amber-950 text-xs font-medium leading-relaxed">
-                      {item.problemDescription.trim()}
+                      <RichTextDisplay content={item.problemDescription.trim()} />
                     </div>
                   ) : (
                     <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -871,7 +876,9 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
                   </div>
 
                   <div className="bg-white/90 p-4 rounded-2xl border border-blue-200 text-xs text-blue-950 font-medium leading-relaxed">
-                    {item.solutionDescription?.trim() || presentation.solutionApplied}
+                    <RichTextDisplay
+                      content={item.solutionDescription?.trim() || presentation.solutionApplied}
+                    />
                   </div>
                 </div>
 

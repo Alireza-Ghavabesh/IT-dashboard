@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { ProcessedEraItem, RawEraItem } from '../types';
 import { JalaliDateInput } from './JalaliDateInput';
+import { RichTextEditor } from './RichTextEditor';
 
 interface EraFormModalProps {
   isOpen: boolean;
@@ -62,6 +63,12 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   const [impactErrorMetric, setImpactErrorMetric] = useState('');
   const [showImpactMetrics, setShowImpactMetrics] = useState(false);
   const [slideNumber, setSlideNumber] = useState<number | ''>('');
+  const [hasBeforeImage, setHasBeforeImage] = useState(false);
+  const [beforeImages, setBeforeImages] = useState<string[]>([]);
+  const [draggedBeforeIdx, setDraggedBeforeIdx] = useState<number | null>(null);
+  const [dragOverBeforeIdx, setDragOverBeforeIdx] = useState<number | null>(null);
+  const beforeFileInputRef = useRef<HTMLInputElement>(null);
+
   const [formImages, setFormImages] = useState<string[]>([]);
   const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
   const [dragOverImgIdx, setDragOverImgIdx] = useState<number | null>(null);
@@ -189,6 +196,36 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         }
       }
       setFormImages(loadedImages);
+
+      // Load optional Before Image(s)
+      const initHasBefore = Boolean(
+        initialItem.hasBeforeImage ||
+        (initialItem as any)["دارای عکس قبل از اصلاح"] === 'بله' ||
+        (initialItem as any)["دارای عکس قبل از اصلاح"] === true ||
+        initialItem.beforeImageUrl ||
+        (Array.isArray(initialItem.beforeImages) && initialItem.beforeImages.length > 0)
+      );
+      setHasBeforeImage(initHasBefore);
+
+      let loadedBeforeImgs: string[] = [];
+      if (initialItem.beforeImages && Array.isArray(initialItem.beforeImages) && initialItem.beforeImages.length > 0) {
+        loadedBeforeImgs = initialItem.beforeImages;
+      } else if (initialItem.beforeImageUrl) {
+        loadedBeforeImgs = [initialItem.beforeImageUrl];
+      } else {
+        try {
+          const cachedJson = localStorage.getItem(`era_before_imgs_${initialItem.id}`) || localStorage.getItem(`era_before_imgs_${initialItem.processName}`);
+          if (cachedJson) {
+            loadedBeforeImgs = JSON.parse(cachedJson);
+          } else {
+            const singleCached = localStorage.getItem(`era_before_img_${initialItem.id}`) || localStorage.getItem(`era_before_img_${initialItem.processName}`);
+            if (singleCached) loadedBeforeImgs = [singleCached];
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      setBeforeImages(loadedBeforeImgs);
     } else {
       setProcessName('');
       setOrgUnit(existingUnits[0] || 'فروش');
@@ -205,6 +242,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       setImpactErrorMetric('');
       setShowImpactMetrics(true);
       setSlideNumber('');
+      setHasBeforeImage(false);
+      setBeforeImages([]);
       setFormImages([]);
     }
     setError(null);
@@ -232,11 +271,52 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
     });
   };
 
+  const handleBeforeImageFiles = (files: FileList | File[]) => {
+    const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+    if (validFiles.length === 0) {
+      setError('لطفاً فایل تصویری معتبر (PNG, JPG, WEBP) انتخاب کنید.');
+      return;
+    }
+
+    Array.from(validFiles).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result) {
+          setBeforeImages(prev => [...prev, result]);
+          setError(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleImageFiles(e.dataTransfer.files);
     }
+  };
+
+  const handleBeforeDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleBeforeImageFiles(e.dataTransfer.files);
+    }
+  };
+
+  const handleRemoveBeforeImage = (indexToRemove: number) => {
+    setBeforeImages(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const handleMoveBeforeImage = (fromIdx: number, toIdx: number) => {
+    if (toIdx < 0 || toIdx >= beforeImages.length || fromIdx === toIdx) return;
+    setBeforeImages(prev => {
+      const next = [...prev];
+      const [item] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, item);
+      return next;
+    });
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
@@ -308,6 +388,14 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
     const savedId = initialItem ? initialItem.id : undefined;
     if (savedId) {
       try {
+        localStorage.setItem(`era_has_before_img_${savedId}`, String(hasBeforeImage));
+        if (hasBeforeImage && beforeImages.length > 0) {
+          localStorage.setItem(`era_before_imgs_${savedId}`, JSON.stringify(beforeImages));
+          localStorage.setItem(`era_before_img_${savedId}`, beforeImages[0]);
+        } else {
+          localStorage.removeItem(`era_before_imgs_${savedId}`);
+          localStorage.removeItem(`era_before_img_${savedId}`);
+        }
         localStorage.setItem(`era_form_imgs_${savedId}`, JSON.stringify(formImages));
         if (formImages[0]) {
           localStorage.setItem(`era_form_img_${savedId}`, formImages[0]);
@@ -370,6 +458,9 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       showImpactMetrics,
       slideNumber: finalSlideNum,
       slideOrder: finalSlideNum,
+      hasBeforeImage,
+      beforeImageUrl: hasBeforeImage && beforeImages.length > 0 ? beforeImages[0] : undefined,
+      beforeImages: hasBeforeImage && beforeImages.length > 0 ? beforeImages : undefined,
       formImageUrl: formImages[0] || undefined,
       formImages: formImages.length > 0 ? formImages : undefined
     });
@@ -684,14 +775,18 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Problem / Before (Right column in slide) */}
               <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 font-bold text-rose-800 text-xs">
-                  <AlertTriangle className="h-4 w-4 text-rose-600" />
-                  <span>مشکل و چالش شناسایی‌شده (ستون قرمز / قبل از اصلاح):</span>
-                </label>
-                <textarea
-                  rows={4}
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 font-bold text-rose-800 text-xs">
+                    <AlertTriangle className="h-4 w-4 text-rose-600" />
+                    <span>مشکل و چالش شناسایی‌شده (ستون قرمز / قبل از اصلاح):</span>
+                  </label>
+                  <span className="text-[10px] text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded-md border border-rose-200 font-bold">
+                    ویرایشگر پیشرفته فونت و رنگ
+                  </span>
+                </div>
+                <RichTextEditor
                   value={problemDescription}
-                  onChange={e => setProblemDescription(e.target.value)}
+                  onChange={setProblemDescription}
                   placeholder={
                     operationType === 'اتوماتیک‌سازی'
                       ? 'مثال: قبل از اتوماتیک‌سازی، فرآیند نیازمند مداخله دستی مکرر کاربران، انجام محاسبات یا جابجایی دستی داده‌ها بود که باعث کندی و خطای انسانی می‌شد...'
@@ -699,23 +794,29 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                       ? 'مثال: قبل از ایجاد فرم، فرآیند به صورت سنتی و کاغذی انجام می‌شد که باعث تاخیر و اتلاف وقت می‌گردید...'
                       : 'مثال: وجود باگ و مغایرت در ثبت، عدم دسترسی کاربران شعبه یا کندی در گردش‌کار قبلی...'
                   }
-                  className="w-full text-xs bg-white border border-rose-200 rounded-xl p-3 text-[#2D2C28] placeholder:text-[#9A9890] focus:outline-none focus:ring-2 focus:ring-rose-400 transition leading-relaxed"
+                  variant="rose"
+                  minHeight="120px"
+                  maxHeight="260px"
                 />
                 <span className="text-[11px] text-rose-700/80 block">
-                  این متن در اسلاید با کارت هشدار قرمز نمایش داده می‌شود.
+                  این متن در اسلاید با کارت هشدار قرمز و قالب‌بندی انتخابی شما (سایز، رنگ، لیست و استایل) نمایش داده می‌شود.
                 </span>
               </div>
 
               {/* Solution / After (Left column in slide) */}
               <div className="space-y-1.5">
-                <label className="flex items-center gap-1.5 font-bold text-emerald-800 text-xs">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  <span>راهکار پیاده‌سازی‌شده در سامانه (ستون سبز / راهکار فناوری اطلاعات):</span>
-                </label>
-                <textarea
-                  rows={4}
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 font-bold text-emerald-800 text-xs">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>راهکار پیاده‌سازی‌شده در سامانه (ستون سبز / راهکار فناوری اطلاعات):</span>
+                  </label>
+                  <span className="text-[10px] text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200 font-bold">
+                    ویرایشگر پیشرفته فونت و رنگ
+                  </span>
+                </div>
+                <RichTextEditor
                   value={solutionDescription}
-                  onChange={e => setSolutionDescription(e.target.value)}
+                  onChange={setSolutionDescription}
                   placeholder={
                     operationType === 'اتوماتیک‌سازی'
                       ? 'مثال: با اتوماتیک‌سازی هوشمند در بستر سامانه، محاسبات و صدور اسناد به شکل تمام‌خودکار و بدون نیاز به مداخله دست انجام می‌پذیرد...'
@@ -723,10 +824,12 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                       ? 'مثال: با راه‌اندازی فرآیند مکانیزه در سامانه ERA، تمام مراحل ثبت، استعلام و تایید بدون کاغذ و آنلاین شد...'
                       : 'مثال: تیم فناوری اطلاعات با ایجاد دسترسی اختصاصی، اصلاح قالب چاپ و بازطراحی فرم مشکل را برطرف نمود...'
                   }
-                  className="w-full text-xs bg-white border border-emerald-200 rounded-xl p-3 text-[#2D2C28] placeholder:text-[#9A9890] focus:outline-none focus:ring-2 focus:ring-emerald-400 transition leading-relaxed"
+                  variant="emerald"
+                  minHeight="120px"
+                  maxHeight="260px"
                 />
                 <span className="text-[11px] text-emerald-700/80 block">
-                  این متن در اسلاید با کارت موفقیت سبز نمایش داده می‌شود.
+                  این متن در اسلاید با کارت موفقیت سبز و قالب‌بندی انتخابی شما نمایش داده می‌شود.
                 </span>
               </div>
             </div>
@@ -928,16 +1031,146 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
             </div>
           </div>
 
+          {/* Optional Before-Image Checkbox Card */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-[#DDDBCF] shadow-2xs hover:border-[#545D4B]/40 transition">
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={hasBeforeImage}
+                onChange={e => setHasBeforeImage(e.target.checked)}
+                className="h-4 w-4 rounded text-[#545D4B] focus:ring-[#545D4B] border-[#C7C5BB] cursor-pointer"
+              />
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs sm:text-sm text-[#2D2C28]">
+                  دارای عکس قبل از اصلاح
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                  اختیاری
+                </span>
+              </div>
+            </label>
+            <span className="text-[11px] text-[#75746E]">
+              {hasBeforeImage
+                ? 'امکان آپلود تصویر وضعیت قبل از اصلاح و وضعیت بعد از اصلاح فعال شد'
+                : 'در صورت عدم انتخاب، فرآیند مطابق روال فعلی فقط دارای تصویر فرم نهایی خواهد بود'}
+            </span>
+          </div>
+
+          {/* Section 1: Before-Image (Only rendered if hasBeforeImage is checked) */}
+          {hasBeforeImage && (
+            <div className="bg-[#FAF4F2] p-4 sm:p-5 rounded-2xl border border-[#F2D1CA] space-y-3 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <label className="font-bold text-[#8A2E1D] text-xs sm:text-sm flex items-center gap-2">
+                    <ImageIcon className="h-4 w-4 text-[#9C3A27]" />
+                    <span>عکس یا اسکرین‌شات وضعیت قبل از اصلاح (کاغذی، دستی یا سنتی) ({beforeImages.length} تصویر):</span>
+                  </label>
+                  <p className="text-[11px] text-[#9C3A27]/80 mt-0.5">
+                    تصویر فرم قدیمی، برگه دستی، گردش کار کاغذی یا وضعیت قبلی که این فرآیند آن را حل کرده است.
+                  </p>
+                </div>
+
+                {beforeImages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => beforeFileInputRef.current?.click()}
+                    className="text-rose-700 hover:text-rose-800 font-bold text-xs flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl border border-rose-200 hover:bg-rose-50 transition cursor-pointer shadow-2xs self-start sm:self-auto"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>افزودن تصویر قبل بیشتر</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Before Images Gallery Grid */}
+              {beforeImages.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
+                  {beforeImages.map((img, idx) => (
+                    <div
+                      key={`before-img-${idx}`}
+                      className="relative rounded-2xl overflow-hidden border-2 border-[#F2D1CA] bg-white flex flex-col shadow-xs"
+                    >
+                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-[#FDF7F5] border-b border-[#F2D1CA] text-xs">
+                        <span className="font-bold text-[11px] px-1.5 py-0.5 rounded-md bg-[#FAECE8] text-[#8A2E1D]">
+                          تصویر قبل {idx + 1}
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBeforeImage(idx)}
+                            className="p-1 rounded-lg text-rose-600 hover:bg-rose-100 transition cursor-pointer"
+                            title="حذف این تصویر قبل"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="relative h-32 bg-slate-950/5 flex items-center justify-center overflow-hidden">
+                        <img src={img} alt={`تصویر قبل ${idx + 1}`} className="w-full h-full object-cover" />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => beforeFileInputRef.current?.click()}
+                    className="border-2 border-dashed border-[#F2D1CA] hover:border-[#9C3A27] rounded-2xl h-[172px] flex flex-col items-center justify-center gap-2 text-[#9C3A27] hover:text-[#8A2E1D] bg-white/70 hover:bg-white transition cursor-pointer"
+                  >
+                    <div className="h-9 w-9 rounded-xl bg-[#FAECE8] flex items-center justify-center">
+                      <Plus className="h-5 w-5" />
+                    </div>
+                    <span className="text-xs font-bold">افزودن عکس قبل</span>
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={handleBeforeDrop}
+                  onClick={() => beforeFileInputRef.current?.click()}
+                  className="border-2 border-dashed border-[#F2D1CA] hover:border-[#9C3A27] rounded-2xl p-5 text-center cursor-pointer bg-white/70 hover:bg-white transition flex flex-col items-center justify-center gap-2"
+                >
+                  <div className="h-10 w-10 rounded-2xl bg-[#FAECE8] flex items-center justify-center text-[#9C3A27]">
+                    <UploadCloud className="h-5 w-5" />
+                  </div>
+                  <span className="font-bold text-xs sm:text-sm text-[#8A2E1D]">
+                    برای آپلود عکس وضعیت قبل از اصلاح کلیک کنید یا عکس را بکشید و رها کنید
+                  </span>
+                  <span className="text-[11px] text-[#9C3A27]/70">
+                    تصویر سند کاغذی، فرم قدیمی یا سیستم سنتی
+                  </span>
+                </div>
+              )}
+
+              <input
+                ref={beforeFileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={e => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleBeforeImageFiles(e.target.files);
+                  }
+                }}
+              />
+            </div>
+          )}
+
           {/* Form Screenshots / Multi-Image Upload & Ordering Section */}
           <div className="bg-[#EFEFEA] p-4 sm:p-5 rounded-2xl border border-[#DDDBCF] space-y-3 shadow-xs">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <label className="font-bold text-[#2D2C28] text-xs sm:text-sm flex items-center gap-2">
                   <ImageIcon className="h-4 w-4 text-[#545D4B]" />
-                  <span>تصاویر و اسکرین‌شات‌های فرآیند ({formImages.length} تصویر):</span>
+                  <span>
+                    {hasBeforeImage
+                      ? `تصاویر و اسکرین‌شات‌های فرآیند (وضعیت بعد از اصلاح) (${formImages.length} تصویر):`
+                      : `تصاویر و اسکرین‌شات‌های فرآیند (${formImages.length} تصویر):`}
+                  </span>
                 </label>
                 <p className="text-[11px] text-[#75746E] mt-0.5">
-                  می‌توانید ترتیب نمایش تصاویر در اسلاید را با دکمه‌های ◀ / ▶ یا کشیدن و رها کردن تغییر دهید. تصویر ۱ کاور اصلی اسلاید است.
+                  {hasBeforeImage
+                    ? 'تصاویر سامانه جدید، فرم‌های مکانیزه و بهبودهای ایجاد شده. تصویر ۱ کاور اصلی اسلاید است.'
+                    : 'می‌توانید ترتیب نمایش تصاویر در اسلاید را با دکمه‌های ◀ / ▶ یا کشیدن و رها کردن تغییر دهید. تصویر ۱ کاور اصلی اسلاید است.'}
                 </p>
               </div>
 

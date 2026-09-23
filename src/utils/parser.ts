@@ -1118,6 +1118,18 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
     let impactErrorMetric = item.impactErrorMetric || rawAny["کاهش خطای انسانی"] || rawAny["کاهش خطا"] || undefined;
     let showImpactMetrics = item.showImpactMetrics !== undefined ? item.showImpactMetrics : undefined;
     let slideNumber: number | null | undefined = item.slideNumber ?? rawAny["شماره اسلاید"] ?? rawAny["ترتیب اسلاید"] ?? rawAny["slideNumber"] ?? rawAny["slideOrder"] ?? undefined;
+
+    // Optional Before Image fields (دارای عکس قبل از اصلاح)
+    let hasBeforeImage = Boolean(
+      item.hasBeforeImage ||
+      rawAny["hasBeforeImage"] ||
+      rawAny["دارای عکس قبل از اصلاح"] === 'بله' ||
+      rawAny["دارای عکس قبل از اصلاح"] === true ||
+      item.beforeImageUrl ||
+      (Array.isArray(item.beforeImages) && item.beforeImages.length > 0)
+    );
+    let beforeImageUrl = item.beforeImageUrl || rawAny["beforeImageUrl"] || rawAny["عکس قبل"] || rawAny["تصویر قبل"] || undefined;
+    let beforeImages: string[] | undefined = item.beforeImages || (beforeImageUrl ? [beforeImageUrl] : undefined);
     if (slideNumber !== undefined && slideNumber !== null) {
       const parsedNum = Number(slideNumber);
       slideNumber = !isNaN(parsedNum) && parsedNum > 0 ? parsedNum : null;
@@ -1211,7 +1223,9 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       createdAt: item.createdAt || new Date().toISOString(),
       formImageUrl: item.formImageUrl,
       formImages: item.formImages,
-      beforeImageUrl: item.beforeImageUrl,
+      hasBeforeImage,
+      beforeImageUrl: beforeImageUrl || item.beforeImageUrl,
+      beforeImages: beforeImages || item.beforeImages,
       afterImageUrl: item.afterImageUrl,
       isSelectedForSlide,
       slideNumber: slideNumber ?? null,

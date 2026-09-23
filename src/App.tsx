@@ -1052,8 +1052,8 @@ export default function App() {
       />
 
       {/* Database & Architecture Info Strip */}
-      <div className="bg-[#EBEBE6] border-b border-[#DDDBCF] px-4 sm:px-6 lg:px-8 py-2 text-xs">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 text-[#5A5852]">
+      <div className="bg-[#EBEBE6] border-b border-[#DDDBCF] px-2 sm:px-4 lg:px-6 py-2 text-xs">
+        <div className="w-full mx-auto flex flex-wrap items-center justify-between gap-2 text-[#5A5852]">
           <div className="flex items-center gap-3">
             <span className="inline-flex items-center gap-1.5 font-bold text-[#2D2C28]">
               <Database className="h-3.5 w-3.5 text-[#446347]" />
@@ -1087,11 +1087,7 @@ export default function App() {
       </div>
 
       {/* Main Content Body */}
-      <main className={`flex-1 w-full mx-auto py-6 transition-all duration-200 ${
-        activeTab === 'era'
-          ? 'max-w-[99vw] px-2 sm:px-4 lg:px-6'
-          : 'max-w-7xl px-4 sm:px-6 lg:px-8'
-      }`}>
+      <main className="flex-1 w-full mx-auto py-6 px-2 sm:px-4 lg:px-6 transition-all duration-200">
         {activeTab === 'removeEdit' ? (
           <RemoveEditDashboard
             letters={processedLetters}
@@ -1144,7 +1140,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="mt-auto border-t border-[#E2E0D8] bg-[#FAFAF7]/80 py-4 text-xs text-[#75746E]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="w-full mx-auto px-2 sm:px-4 lg:px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-[#446347] animate-pulse" />
             <span className="font-semibold text-[#2D2C28]">سامانه هوشمند آمار و پایش واحد IT (نرم افزار)</span>

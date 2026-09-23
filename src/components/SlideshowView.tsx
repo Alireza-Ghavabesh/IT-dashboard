@@ -37,7 +37,8 @@ import {
   ArrowUpDown,
   GripVertical,
   GripHorizontal,
-  Workflow
+  Workflow,
+  Columns2
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import {
@@ -46,6 +47,7 @@ import {
 } from '../data/presentationTemplates';
 import { downloadPresentationHtml } from '../utils/htmlExport';
 import { SlideReorderModal } from './SlideReorderModal';
+import { RichTextDisplay } from './RichTextDisplay';
 
 interface SlideshowViewProps {
   items: ProcessedEraItem[];
@@ -423,6 +425,31 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
 
     return imgs;
   }, [currentItem, presentation]);
+
+  // Load optional Before Image(s) of current item safely
+  const currentBeforeImage = useMemo(() => {
+    if (!currentItem) return null;
+    if (currentItem.hasBeforeImage === false) return null;
+    if (currentItem.beforeImageUrl) return currentItem.beforeImageUrl;
+    if (currentItem.beforeImages && currentItem.beforeImages.length > 0) return currentItem.beforeImages[0];
+    try {
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(`era_before_img_${currentItem.id}`) || localStorage.getItem(`era_before_img_${currentItem.processName}`);
+        if (cached) return cached;
+      }
+    } catch (e) {
+      console.warn(e);
+    }
+    return null;
+  }, [currentItem]);
+
+  const [photoStageMode, setPhotoStageMode] = useState<'after' | 'before'>('after');
+  const [photoLayoutMode, setPhotoLayoutMode] = useState<'dual' | 'single'>('dual');
+
+  useEffect(() => {
+    setPhotoStageMode('after');
+    setPhotoLayoutMode('dual');
+  }, [currentItem?.id]);
 
   // Navigation handlers
   const handlePrev = useCallback(() => {
@@ -912,6 +939,66 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  {currentBeforeImage && currentImages.length > 0 && (
+                    <div className="flex items-center gap-1 bg-[#E8E6DF] p-0.5 rounded-xl border border-[#DDDBCF] text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPhotoLayoutMode('dual')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                          photoLayoutMode === 'dual'
+                            ? 'bg-white text-indigo-900 shadow-xs'
+                            : 'text-[#5A5852] hover:text-[#2D2C28]'
+                        }`}
+                        title="نمایش هم‌زمان ۲تایی: تصویر قبل و تصویر بعد کنار هم"
+                      >
+                        <Columns2 className="h-3.5 w-3.5 text-indigo-600" />
+                        <span>نمایش ۲تایی (قبل و بعد)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoLayoutMode('single')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                          photoLayoutMode === 'single'
+                            ? 'bg-white text-[#2D2C28] shadow-xs'
+                            : 'text-[#5A5852] hover:text-[#2D2C28]'
+                        }`}
+                        title="نمایش تک‌تصویر بزرگ"
+                      >
+                        <span>تک‌تصویر</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {currentBeforeImage && (photoLayoutMode === 'single' || currentImages.length === 0) && (
+                    <div className="flex items-center gap-1 bg-[#E8E6DF] p-0.5 rounded-xl border border-[#DDDBCF] text-[10px] font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPhotoStageMode('after')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                          photoStageMode === 'after'
+                            ? 'bg-white text-emerald-800 shadow-xs'
+                            : 'text-[#5A5852] hover:text-[#2D2C28]'
+                        }`}
+                        title="نمایش تصویر وضعیت بعد از اصلاح (سامانه مکانیزه)"
+                      >
+                        <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                        <span>عکس بعد از اصلاح</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPhotoStageMode('before')}
+                        className={`px-2.5 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                          photoStageMode === 'before'
+                            ? 'bg-white text-rose-800 shadow-xs'
+                            : 'text-[#5A5852] hover:text-[#2D2C28]'
+                        }`}
+                        title="نمایش تصویر وضعیت قبل از اصلاح (کاغذی یا سنتی)"
+                      >
+                        <AlertTriangle className="h-3 w-3 text-rose-600" />
+                        <span>عکس قبل از اصلاح</span>
+                      </button>
+                    </div>
+                  )}
                   {(!showAchievements || !showImpactMetrics) && onOpenEdit && (
                     <button
                       onClick={() => onOpenEdit(currentItem)}
@@ -922,7 +1009,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                       <span>تنظیمات اسلاید</span>
                     </button>
                   )}
-                  {currentImages.length > 0 && (
+                  {(currentImages.length > 0 || currentBeforeImage) && (
                     <span className="text-[10px] text-[#75746E] font-medium hidden sm:inline">
                       برای نمایش بزرگ روی تصویر کلیک کنید
                     </span>
@@ -931,64 +1018,213 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
               </div>
 
               {/* Main Image Stage */}
-              {currentImages.length > 0 ? (
-                <div className={`${isUnderImageMode ? 'flex-1 min-h-0' : 'flex-1 min-h-0'} flex flex-col items-center justify-center overflow-hidden`}>
-                  {/* Dynamic Flexible Frame that adjusts strictly within available height */}
-                  <div 
-                    className="relative group w-full flex-1 min-h-0 rounded-xl border border-[#DDDBCF] bg-[#FAFAF7] flex items-center justify-center p-1.5 overflow-hidden shadow-inner cursor-zoom-in"
-                    onClick={() => handleOpenPreviewModal(currentImages[activeImageIndex] || currentImages[0], activeImageIndex)}
-                  >
-                    <img
-                      src={currentImages[activeImageIndex] || currentImages[0]}
-                      alt={`${currentItem.processName} Screenshot`}
-                      className="max-h-full max-w-full w-auto h-auto object-contain rounded shadow-sm select-none transition-transform duration-200 group-hover:scale-[1.01]"
-                    />
-
-                    {/* Left/Right navigation arrows on the image if multiple images */}
-                    {currentImages.length > 1 && (
-                      <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none z-10">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveImageIndex(p => (p > 0 ? p - 1 : currentImages.length - 1));
-                          }}
-                          className="p-1.5 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
-                          title="تصویر قبلی"
+              {(currentImages.length > 0 || currentBeforeImage) ? (
+                <div className={`${isUnderImageMode ? 'flex-1 min-h-0' : 'flex-1 min-h-0'} flex flex-col items-center justify-center overflow-hidden w-full`}>
+                  {/* CASE 1: DUAL 2-UP SIDE-BY-SIDE DISPLAY (Before and After Photos together) */}
+                  {currentBeforeImage && currentImages.length > 0 && photoLayoutMode === 'dual' ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 w-full h-full min-h-0 overflow-hidden">
+                      {/* RIGHT CARD: Before Image (وضعیت قبل از اصلاح) */}
+                      <div className="flex flex-col h-full min-h-0 bg-[#FFF8F7] rounded-xl border border-rose-300 overflow-hidden shadow-2xs group/before relative">
+                        <div className="flex items-center justify-between px-2.5 py-1 bg-rose-100/80 border-b border-rose-200 shrink-0">
+                          <div className="flex items-center gap-1.5 text-rose-900 font-black text-[11px]">
+                            <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                            <span>عکس وضعیت قبل از اصلاح</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenPreviewModal(currentBeforeImage, 0);
+                            }}
+                            className="text-[10px] text-rose-800 hover:text-rose-950 bg-white/90 hover:bg-white px-2 py-0.5 rounded-lg border border-rose-300 flex items-center gap-1 cursor-pointer font-bold shadow-2xs transition"
+                            title="بزرگ‌نمایی عکس قبل"
+                          >
+                            <ZoomIn className="h-3 w-3 text-rose-600" />
+                            <span>بزرگ‌نمایی</span>
+                          </button>
+                        </div>
+                        <div
+                          className="flex-1 min-h-0 flex items-center justify-center p-2 cursor-zoom-in overflow-hidden relative"
+                          onClick={() => handleOpenPreviewModal(currentBeforeImage, 0)}
                         >
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveImageIndex(p => (p < currentImages.length - 1 ? p + 1 : 0));
-                          }}
-                          className="p-1.5 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
-                          title="تصویر بعدی"
-                        >
-                          <ChevronLeft className="h-3.5 w-3.5" />
-                        </button>
+                          <img
+                            src={currentBeforeImage}
+                            alt="عکس قبل از اصلاح"
+                            className="max-h-full max-w-full w-auto h-auto object-contain rounded shadow-xs select-none transition-transform duration-200 group-hover/before:scale-[1.02]"
+                          />
+                        </div>
                       </div>
-                    )}
 
-                    {/* Overlay Zoom Action Badge */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenPreviewModal(currentImages[activeImageIndex] || currentImages[0], activeImageIndex);
+                      {/* LEFT CARD: After Image (وضعیت بعد از اصلاح در سامانه) */}
+                      <div className="flex flex-col h-full min-h-0 bg-[#F0FDF4] rounded-xl border border-emerald-300 overflow-hidden shadow-2xs group/after relative">
+                        <div className="flex items-center justify-between px-2.5 py-1 bg-emerald-100/80 border-b border-emerald-200 shrink-0">
+                          <div className="flex items-center gap-1.5 text-emerald-900 font-black text-[11px]">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                            <span>عکس وضعیت بعد از اصلاح (سامانه)</span>
+                            {currentImages.length > 1 && (
+                              <span className="text-[10px] text-emerald-800 bg-white/90 px-1.5 py-0.2 rounded font-mono font-bold">
+                                {activeImageIndex + 1} از {currentImages.length}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenPreviewModal(currentImages[activeImageIndex] || currentImages[0], activeImageIndex);
+                            }}
+                            className="text-[10px] text-emerald-800 hover:text-emerald-950 bg-white/90 hover:bg-white px-2 py-0.5 rounded-lg border border-emerald-300 flex items-center gap-1 cursor-pointer font-bold shadow-2xs transition"
+                            title="بزرگ‌نمایی عکس بعد"
+                          >
+                            <ZoomIn className="h-3 w-3 text-emerald-600" />
+                            <span>بزرگ‌نمایی</span>
+                          </button>
+                        </div>
+                        <div
+                          className="flex-1 min-h-0 flex items-center justify-center p-2 cursor-zoom-in overflow-hidden relative"
+                          onClick={() => handleOpenPreviewModal(currentImages[activeImageIndex] || currentImages[0], activeImageIndex)}
+                        >
+                          <img
+                            src={currentImages[activeImageIndex] || currentImages[0]}
+                            alt="عکس بعد از اصلاح"
+                            className="max-h-full max-w-full w-auto h-auto object-contain rounded shadow-xs select-none transition-transform duration-200 group-hover/after:scale-[1.02]"
+                          />
+
+                          {/* Left/Right navigation arrows if multiple after images */}
+                          {currentImages.length > 1 && (
+                            <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none z-10">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveImageIndex(p => (p > 0 ? p - 1 : currentImages.length - 1));
+                                }}
+                                className="p-1 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
+                                title="تصویر قبلی"
+                              >
+                                <ChevronRight className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveImageIndex(p => (p < currentImages.length - 1 ? p + 1 : 0));
+                                }}
+                                className="p-1 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
+                                title="تصویر بعدی"
+                              >
+                                <ChevronLeft className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Thumbnail Row if Multiple Images */}
+                        {currentImages.length > 1 && (
+                          <div className="flex items-center gap-1.5 py-1 px-2 border-t border-emerald-100 overflow-x-auto w-full justify-center shrink-0 bg-white/60">
+                            {currentImages.map((img, idx) => (
+                              <button
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveImageIndex(idx);
+                                }}
+                                className={`relative rounded overflow-hidden border transition-all p-0.5 cursor-pointer shrink-0 ${
+                                  activeImageIndex === idx ? 'border-emerald-600 ring-2 ring-emerald-500/40 scale-105' : 'border-slate-300 opacity-60 hover:opacity-100'
+                                }`}
+                              >
+                                <img src={img} alt={`Thumb ${idx + 1}`} className="h-5 w-8 object-cover rounded" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* CASE 2: SINGLE IMAGE FRAME (User toggled or single mode) */
+                    <div 
+                      className={`relative group w-full flex-1 min-h-0 rounded-xl border bg-[#FAFAF7] flex items-center justify-center p-1.5 overflow-hidden shadow-inner cursor-zoom-in ${
+                        photoStageMode === 'before' && currentBeforeImage ? 'border-rose-300 ring-2 ring-rose-200/40' : 'border-[#DDDBCF]'
+                      }`}
+                      onClick={() => {
+                        const targetImg = (photoStageMode === 'before' && currentBeforeImage)
+                          ? currentBeforeImage
+                          : (currentImages[activeImageIndex] || currentImages[0] || currentBeforeImage || '');
+                        handleOpenPreviewModal(targetImg, activeImageIndex);
                       }}
-                      className="absolute bottom-2 left-2 bg-[#2D2C28]/90 hover:bg-[#2D2C28] text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-md opacity-90 group-hover:opacity-100 transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer z-10"
-                      title="بزرگ‌نمایی و قابلیت زوم روی جزئیات تصویر"
                     >
-                      <ZoomIn className="h-3.5 w-3.5 text-emerald-400" />
-                      <span>بزرگ‌نمایی</span>
-                    </button>
-                  </div>
+                      <img
+                        src={
+                          (photoStageMode === 'before' && currentBeforeImage)
+                            ? currentBeforeImage
+                            : (currentImages[activeImageIndex] || currentImages[0] || currentBeforeImage || '')
+                        }
+                        alt={`${currentItem.processName} Screenshot`}
+                        className="max-h-full max-w-full w-auto h-auto object-contain rounded shadow-sm select-none transition-transform duration-200 group-hover:scale-[1.01]"
+                      />
 
-                  {/* Thumbnail Row if Multiple Images */}
-                  {currentImages.length > 1 && (
+                      {/* Mode Tag Badge on Image */}
+                      {currentBeforeImage && (
+                        <div className="absolute top-2 right-2 pointer-events-none z-10">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border shadow-sm ${
+                            photoStageMode === 'before'
+                              ? 'bg-rose-100 text-rose-800 border-rose-300'
+                              : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          }`}>
+                            {photoStageMode === 'before' ? 'عکس وضعیت قبل از اصلاح (سنتی)' : 'عکس وضعیت بعد از اصلاح (سامانه)'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Left/Right navigation arrows on the image if multiple images */}
+                      {photoStageMode === 'after' && currentImages.length > 1 && (
+                        <div className="absolute inset-x-2 top-1/2 -translate-y-1/2 flex items-center justify-between pointer-events-none z-10">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveImageIndex(p => (p > 0 ? p - 1 : currentImages.length - 1));
+                            }}
+                            className="p-1.5 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
+                            title="تصویر قبلی"
+                          >
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveImageIndex(p => (p < currentImages.length - 1 ? p + 1 : 0));
+                            }}
+                            className="p-1.5 rounded-full bg-white/90 text-[#2D2C28] hover:bg-[#545D4B] hover:text-white pointer-events-auto transition cursor-pointer shadow-md border border-[#DDDBCF]"
+                            title="تصویر بعدی"
+                          >
+                            <ChevronLeft className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Overlay Zoom Action Badge */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const targetImg = (photoStageMode === 'before' && currentBeforeImage)
+                            ? currentBeforeImage
+                            : (currentImages[activeImageIndex] || currentImages[0]);
+                          handleOpenPreviewModal(targetImg, activeImageIndex);
+                        }}
+                        className="absolute bottom-2 left-2 bg-[#2D2C28]/90 hover:bg-[#2D2C28] text-white px-3 py-1.5 rounded-xl border border-white/20 shadow-md opacity-90 group-hover:opacity-100 transition-all flex items-center gap-1.5 text-xs font-bold cursor-pointer z-10"
+                        title="بزرگ‌نمایی و قابلیت زوم روی جزئیات تصویر"
+                      >
+                        <ZoomIn className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>بزرگ‌نمایی</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Thumbnail Row if Multiple Images in single mode */}
+                  {!(currentBeforeImage && currentImages.length > 0 && photoLayoutMode === 'dual') && currentImages.length > 1 && (
                     <div className="flex items-center gap-1.5 pt-1.5 mt-1 border-t border-[#E8E6DF] overflow-x-auto w-full justify-center shrink-0">
                       {currentImages.map((img, idx) => (
                         <button
@@ -1027,28 +1263,40 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                         <AlertTriangle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-rose-600 shrink-0" />
                         <span>{isCreation ? 'وضعیت قبل از اقدام:' : 'مشکل و چالش شناسایی‌شده:'}</span>
                       </div>
-                      {onOpenEdit && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenEdit(currentItem)}
-                          className="text-[10px] text-rose-700 hover:text-rose-900 flex items-center gap-0.5 cursor-pointer"
-                          title="ویرایش متن قبل از اقدام"
-                        >
-                          <Edit className="h-2.5 w-2.5" />
-                          <span>ویرایش</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {currentBeforeImage && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPhotoStageMode('before');
+                              handleOpenPreviewModal(currentBeforeImage, 0);
+                            }}
+                            className="text-[10px] text-rose-800 bg-rose-100 hover:bg-rose-200 px-1.5 py-0.5 rounded-md flex items-center gap-1 cursor-pointer font-bold border border-rose-300 transition"
+                            title="مشاهده عکس وضعیت قبل از اصلاح"
+                          >
+                            <ImageIcon className="h-2.5 w-2.5" />
+                            <span>عکس قبل</span>
+                          </button>
+                        )}
+                        {onOpenEdit && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenEdit(currentItem)}
+                            className="text-[10px] text-rose-700 hover:text-rose-900 flex items-center gap-0.5 cursor-pointer"
+                            title="ویرایش متن قبل از اقدام"
+                          >
+                            <Edit className="h-2.5 w-2.5" />
+                            <span>ویرایش</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 custom-scrollbar">
-                      {beforeText ? (
-                        <p className="text-[11px] sm:text-xs text-[#4A4944] leading-relaxed whitespace-pre-wrap font-medium">
-                          {beforeText}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-[#A8A69E] italic py-0.5">
-                          موردی برای قبل از اقدام ثبت نشده است.
-                        </p>
-                      )}
+                      <RichTextDisplay
+                        content={beforeText}
+                        className="text-[11px] sm:text-xs text-[#4A4944] font-medium"
+                        fallbackText="موردی برای قبل از اقدام ثبت نشده است."
+                      />
                     </div>
                   </div>
 
@@ -1072,15 +1320,11 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                       )}
                     </div>
                     <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 custom-scrollbar">
-                      {afterText ? (
-                        <p className="text-[11px] sm:text-xs text-[#4A4944] leading-relaxed whitespace-pre-wrap font-medium">
-                          {afterText}
-                        </p>
-                      ) : (
-                        <p className="text-[10px] text-[#A8A69E] italic py-0.5">
-                          موردی برای بعد از اقدام ثبت نشده است.
-                        </p>
-                      )}
+                      <RichTextDisplay
+                        content={afterText}
+                        className="text-[11px] sm:text-xs text-[#4A4944] font-medium"
+                        fallbackText="موردی برای بعد از اقدام ثبت نشده است."
+                      />
                     </div>
                   </div>
                 </div>
@@ -1182,9 +1426,11 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
-                  <p className="text-xs sm:text-sm text-rose-950 leading-relaxed font-medium whitespace-pre-line">
-                    {beforeText}
-                  </p>
+                  <RichTextDisplay
+                    content={beforeText}
+                    className="text-xs sm:text-sm text-rose-950 font-medium"
+                    fallbackText="موردی برای قبل از اقدام ثبت نشده است."
+                  />
                 </div>
               </div>
             </div>
@@ -1208,9 +1454,11 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   )}
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
-                  <p className="text-xs sm:text-sm text-emerald-950 leading-relaxed font-medium whitespace-pre-line">
-                    {afterText}
-                  </p>
+                  <RichTextDisplay
+                    content={afterText}
+                    className="text-xs sm:text-sm text-emerald-950 font-medium"
+                    fallbackText="موردی برای بعد از اقدام ثبت نشده است."
+                  />
                 </div>
               </div>
             </div>

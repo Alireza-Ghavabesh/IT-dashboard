@@ -27,6 +27,9 @@ import {
   Tag,
   Presentation,
   ArrowRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   TrendingUp,
   FileCheck2,
   Image as ImageIcon,
@@ -273,6 +276,35 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     if (typeof window !== 'undefined') {
       localStorage.setItem('era_chart_group_by', mode);
     }
+  };
+
+  // --- Column Sorting State for Process Table ---
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (colKey: string) => {
+    if (sortColumn === colKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(colKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIndicator = (colKey: string) => {
+    if (sortColumn === colKey) {
+      return sortDirection === 'asc' ? (
+        <ArrowUp className="h-3 w-3 text-[#545D4B] shrink-0" />
+      ) : (
+        <ArrowDown className="h-3 w-3 text-[#545D4B] shrink-0" />
+      );
+    }
+    return <ArrowUpDown className="h-2.5 w-2.5 text-[#8A8880] opacity-40 group-hover:opacity-100 transition shrink-0" />;
   };
 
   // --- Server-Side Query & Pagination State ---
@@ -556,6 +588,63 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     setTempEndDate('');
     setIsDateFilterOpen(false);
   };
+
+  // Sorted items based on active column and direction
+  const sortedEraItems = useMemo(() => {
+    const list = filterExecutionMode === 'server' && bpmnFilter !== 'all' 
+      ? serverItems.filter(i => bpmnFilter === 'with-bpmn' ? Boolean(i.hasBpmn || i.bpmnXml) : (!i.hasBpmn && !i.bpmnXml))
+      : (filterExecutionMode === 'server' ? serverItems : filteredItems);
+
+    if (!sortColumn) return list;
+
+    return [...list].sort((a, b) => {
+      let comparison = 0;
+      switch (sortColumn) {
+        case 'index': {
+          const idxA = (a as any).rawIndex ?? (parseInt(a.id, 10) || 0);
+          const idxB = (b as any).rawIndex ?? (parseInt(b.id, 10) || 0);
+          comparison = idxA - idxB;
+          break;
+        }
+        case 'processName':
+          comparison = (a.processName || '').localeCompare(b.processName || '', 'fa');
+          break;
+        case 'entityType':
+          comparison = (a.entityType || 'فرآیند').localeCompare(b.entityType || 'فرآیند', 'fa');
+          break;
+        case 'orgUnit':
+          comparison = (a.orgUnit || '').localeCompare(b.orgUnit || '', 'fa');
+          break;
+        case 'executionDate':
+          comparison = (a.executionDate || '').localeCompare(b.executionDate || '');
+          break;
+        case 'operationType':
+          comparison = (a.operationType || '').localeCompare(b.operationType || '', 'fa');
+          break;
+        case 'status':
+          comparison = (a.status || 'انجام شده').localeCompare(b.status || 'انجام شده', 'fa');
+          break;
+        case 'description':
+          comparison = (a.description || '').localeCompare(b.description || '', 'fa');
+          break;
+        case 'bpmn': {
+          const hasA = a.hasBpmn || a.bpmnXml ? 1 : 0;
+          const hasB = b.hasBpmn || b.bpmnXml ? 1 : 0;
+          comparison = hasA - hasB;
+          break;
+        }
+        case 'slideToggle': {
+          const sA = a.isSelectedForSlide ? 1 : 0;
+          const sB = b.isSelectedForSlide ? 1 : 0;
+          comparison = sA - sB;
+          break;
+        }
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filterExecutionMode, bpmnFilter, serverItems, filteredItems, sortColumn, sortDirection]);
 
   // Count items with slide toggle enabled
   const slideSelectedCount = useMemo(() => {
@@ -2015,27 +2104,73 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
 
           <table className="w-full text-xs text-right border-collapse table-auto">
             <thead>
-              {/* Row 1: Column Titles */}
-              <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF]">
+              {/* Row 1: Column Titles with Sorting */}
+              <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF] select-none">
                 {isColVisible('index') && (
-                  <th className="py-2.5 px-2 w-10 min-w-[38px] text-center text-[11px]">#</th>
+                  <th
+                    onClick={() => handleSort('index')}
+                    className="py-2.5 px-2 w-10 min-w-[38px] text-center text-[11px] cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس شماره ردیف"
+                  >
+                    <div className="flex items-center justify-center gap-0.5">
+                      <span>#</span>
+                      {renderSortIndicator('index')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('processName') && (
-                  <th className="py-2.5 px-3 min-w-[190px] text-right text-xs">نام فرآیند / موجودیت</th>
+                  <th
+                    onClick={() => handleSort('processName')}
+                    className="py-2.5 px-3 min-w-[190px] text-right text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس نام فرآیند / موجودیت"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span>نام فرآیند / موجودیت</span>
+                      {renderSortIndicator('processName')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('entityType') && (
-                  <th className="py-2.5 px-2 min-w-[70px] text-center text-xs">نوع</th>
+                  <th
+                    onClick={() => handleSort('entityType')}
+                    className="py-2.5 px-2 min-w-[70px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس نوع موجودیت"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>نوع</span>
+                      {renderSortIndicator('entityType')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('orgUnit') && (
-                  <th className="py-2.5 px-3 min-w-[130px] text-right text-xs">واحد سازمانی</th>
+                  <th
+                    onClick={() => handleSort('orgUnit')}
+                    className="py-2.5 px-3 min-w-[130px] text-right text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس واحد سازمانی"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span>واحد سازمانی</span>
+                      {renderSortIndicator('orgUnit')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('executionDate') && (
-                  <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">
-                    <div className="flex items-center justify-center gap-1">
-                      <span>تاریخ انجام</span>
+                  <th
+                    className="py-2.5 px-2 min-w-[110px] text-center text-xs hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس تاریخ انجام"
+                  >
+                    <div className="flex items-center justify-center gap-1.5">
+                      <div
+                        onClick={() => handleSort('executionDate')}
+                        className="flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>تاریخ انجام</span>
+                        {renderSortIndicator('executionDate')}
+                      </div>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.stopPropagation();
                           setTempStartDate(startDate);
                           setTempEndDate(endDate);
                           setIsDateFilterOpen(prev => !prev);
@@ -2053,19 +2188,51 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                   </th>
                 )}
                 {isColVisible('operationType') && (
-                  <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">نوع اقدام</th>
+                  <th
+                    onClick={() => handleSort('operationType')}
+                    className="py-2.5 px-2 min-w-[95px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس نوع اقدام"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>نوع اقدام</span>
+                      {renderSortIndicator('operationType')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('status') && (
-                  <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">وضعیت</th>
+                  <th
+                    onClick={() => handleSort('status')}
+                    className="py-2.5 px-2 min-w-[115px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس وضعیت"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>وضعیت</span>
+                      {renderSortIndicator('status')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('description') && (
-                  <th className="py-2.5 px-3 min-w-[200px] text-right text-xs">توضیحات و شرح</th>
+                  <th
+                    onClick={() => handleSort('description')}
+                    className="py-2.5 px-3 min-w-[200px] text-right text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس شرح و توضیحات"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span>توضیحات و شرح</span>
+                      {renderSortIndicator('description')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('bpmn') && (
-                  <th className="py-2.5 px-2 min-w-[115px] text-center text-xs">
-                    <div className="flex items-center justify-center gap-1" title="طراحی و مدل‌سازی فرآیند با bpmn.js استاندارد BPMN 2.0">
+                  <th
+                    onClick={() => handleSort('bpmn')}
+                    className="py-2.5 px-2 min-w-[115px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس دیاگرام BPMN"
+                  >
+                    <div className="flex items-center justify-center gap-1">
                       <Workflow className="h-3.5 w-3.5 text-[#545D4B]" />
                       <span>دیاگرام BPMN</span>
+                      {renderSortIndicator('bpmn')}
                     </div>
                   </th>
                 )}
@@ -2073,7 +2240,16 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                   <th className="py-2.5 px-2 min-w-[110px] text-center text-xs">نمایش اسلاید</th>
                 )}
                 {isColVisible('slideToggle') && (
-                  <th className="py-2.5 px-2 min-w-[95px] text-center text-xs">اسلایدشو</th>
+                  <th
+                    onClick={() => handleSort('slideToggle')}
+                    className="py-2.5 px-2 min-w-[95px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس انتخاب برای اسلایدشو"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <span>اسلایدشو</span>
+                      {renderSortIndicator('slideToggle')}
+                    </div>
+                  </th>
                 )}
                 {isColVisible('actions') && (
                   <th className="py-2.5 px-2 min-w-[65px] text-center text-xs">عملیات</th>
@@ -2529,20 +2705,14 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#E8E6DF]">
-              {(filterExecutionMode === 'server' && bpmnFilter !== 'all' 
-                ? serverItems.filter(i => bpmnFilter === 'with-bpmn' ? Boolean(i.hasBpmn || i.bpmnXml) : (!i.hasBpmn && !i.bpmnXml))
-                : (filterExecutionMode === 'server' ? serverItems : filteredItems)
-              ).length === 0 ? (
+              {sortedEraItems.length === 0 ? (
                 <tr>
                   <td colSpan={visibleColCount || 1} className="py-8 text-center text-[#8A8880] font-medium">
                     {serverLoading ? 'در حال جستجو و دریافت اطلاعات...' : 'موردی یافت نشد.'}
                   </td>
                 </tr>
               ) : (
-                (filterExecutionMode === 'server' && bpmnFilter !== 'all'
-                  ? serverItems.filter(i => bpmnFilter === 'with-bpmn' ? Boolean(i.hasBpmn || i.bpmnXml) : (!i.hasBpmn && !i.bpmnXml))
-                  : (filterExecutionMode === 'server' ? serverItems : filteredItems)
-                ).map((item, idx) => {
+                sortedEraItems.map((item, idx) => {
                   const isNew = item.operationType === 'جدید';
                   const isAuto = item.operationType === 'اتوماتیک‌سازی' || item.operationType === 'اتوماتیک سازی';
                   const entity = item.entityType || 'فرآیند';

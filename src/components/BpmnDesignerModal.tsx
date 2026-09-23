@@ -20,7 +20,10 @@ import {
   Maximize,
   Workflow,
   Palette,
-  Type
+  Type,
+  Expand,
+  Shrink,
+  SlidersHorizontal
 } from 'lucide-react';
 // @ts-ignore
 import BpmnModeler from 'bpmn-js/lib/Modeler.js';
@@ -203,6 +206,7 @@ export const BpmnDesignerModal: React.FC<BpmnDesignerModalProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const modelerRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const saveActionRef = useRef<() => void>(() => {});
 
   const [isInitialized, setIsInitialized] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -239,7 +243,7 @@ export const BpmnDesignerModal: React.FC<BpmnDesignerModalProps> = ({
     onClose();
   }, [onClose]);
 
-  // Keyboard shortcut listener: ESC to close with capture
+  // Keyboard shortcut listener: ESC to close, Ctrl+S to save
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -247,6 +251,10 @@ export const BpmnDesignerModal: React.FC<BpmnDesignerModalProps> = ({
         e.preventDefault();
         e.stopPropagation();
         handleClose();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        e.stopPropagation();
+        saveActionRef.current();
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
@@ -357,6 +365,81 @@ export const BpmnDesignerModal: React.FC<BpmnDesignerModalProps> = ({
     }
   }, []);
 
+  // Scale selected element(s) up or down (Visio quick resize)
+  const handleScaleSelected = useCallback((factor: number) => {
+    if (!modelerRef.current) return;
+    try {
+      const selection = modelerRef.current.get('selection');
+      const modeling = modelerRef.current.get('modeling');
+      if (!selection || !modeling) return;
+
+      const selected = selection.get();
+      if (!selected || selected.length === 0) return;
+
+      selected.forEach((shape: any) => {
+        if (!shape || shape.waypoints || shape.type === 'label' || shape.type === 'bpmn:Process') return;
+        const newW = Math.max(Math.round(shape.width * factor), 40);
+        const newH = Math.max(Math.round(shape.height * factor), 30);
+        const dx = (newW - shape.width) / 2;
+        const dy = (newH - shape.height) / 2;
+        const newBounds = {
+          x: Math.round(shape.x - dx),
+          y: Math.round(shape.y - dy),
+          width: newW,
+          height: newH
+        };
+        modeling.resizeShape(shape, newBounds);
+      });
+      setHasUnsavedChanges(true);
+    } catch (err) {
+      console.error('Failed to scale selected shape:', err);
+    }
+  }, []);
+
+  // Reset selected element(s) to standard default Visio dimensions
+  const handleResetSelectedSize = useCallback(() => {
+    if (!modelerRef.current) return;
+    try {
+      const selection = modelerRef.current.get('selection');
+      const modeling = modelerRef.current.get('modeling');
+      if (!selection || !modeling) return;
+
+      const selected = selection.get();
+      if (!selected || selected.length === 0) return;
+
+      selected.forEach((shape: any) => {
+        if (!shape || shape.waypoints || shape.type === 'label' || shape.type === 'bpmn:Process') return;
+        let stdW = 100;
+        let stdH = 80;
+        if (shape.type?.includes('Gateway')) {
+          stdW = 50;
+          stdH = 50;
+        } else if (shape.type?.includes('Event')) {
+          stdW = 36;
+          stdH = 36;
+        } else if (shape.type?.includes('TextAnnotation')) {
+          stdW = 100;
+          stdH = 30;
+        } else if (shape.type?.includes('Participant')) {
+          stdW = 600;
+          stdH = 250;
+        }
+        const dx = (stdW - shape.width) / 2;
+        const dy = (stdH - shape.height) / 2;
+        const newBounds = {
+          x: Math.round(shape.x - dx),
+          y: Math.round(shape.y - dy),
+          width: stdW,
+          height: stdH
+        };
+        modeling.resizeShape(shape, newBounds);
+      });
+      setHasUnsavedChanges(true);
+    } catch (err) {
+      console.error('Failed to reset size:', err);
+    }
+  }, []);
+
   // Initialize BPMN Modeler
   useEffect(() => {
     if (!isOpen || !containerRef.current) return;
@@ -373,6 +456,82 @@ export const BpmnDesignerModal: React.FC<BpmnDesignerModalProps> = ({
         }
       });
       modelerRef.current = modelerInstance;
+
+      // --- Universal Visio-Style Resizing for BPMN Shapes ---
+      try {
+        const eventBus = modelerInstance.get('eventBus');
+        const bpmnRules = modelerInstance.get('bpmnRules');
+
+        const canShapeResize = (shape: any) => {
+          if (!shape) return false;
+          // Do not resize text labels, sequence flows, message flows, associations, or root
+          if (shape.type === 'label' || shape.labelTarget) return false;
+          if (
+            shape.waypoints ||
+            shape.type === 'bpmn:SequenceFlow' ||
+            shape.type === 'bpmn:MessageFlow' ||
+            shape.type === 'bpmn:Association'
+          ) {
+            return false;
+          }
+          if (shape.type === 'bpmn:Process' || shape.id === '__implicitroot') return false;
+
+          // Pools / Participants
+          if (shape.type?.includes('Participant')) {
+            return { min: { width: 300, height: 120 } };
+          }
+          // Lanes
+          if (shape.type?.includes('Lane')) {
+            return { min: { width: 300, height: 60 } };
+          }
+          // SubProcesses
+          if (shape.type?.includes('SubProcess')) {
+            return { min: { width: 140, height: 100 } };
+          }
+          // Tasks & Activities (Allow free resizing like Visio)
+          if (shape.type?.includes('Task') || shape.type?.includes('Activity')) {
+            return { min: { width: 50, height: 35 } };
+          }
+          // Gateways (Allow resizing)
+          if (shape.type?.includes('Gateway')) {
+            return { min: { width: 32, height: 32 } };
+          }
+          // Events (Allow resizing)
+          if (shape.type?.includes('Event')) {
+            return { min: { width: 24, height: 24 } };
+          }
+          // Annotations & Artifacts
+          if (
+            shape.type?.includes('TextAnnotation') ||
+            shape.type?.includes('DataObject') ||
+            shape.type?.includes('DataStore') ||
+            shape.type?.includes('Group')
+          ) {
+            return { min: { width: 40, height: 25 } };
+          }
+
+          return { min: { width: 30, height: 30 } };
+        };
+
+        if (eventBus) {
+          const resizeRuleHandler = (event: any) => {
+            const context = event.context || event;
+            const shape = context?.shape;
+            return canShapeResize(shape);
+          };
+          // Priority 2000 ensures this runs before standard bpmn-js rules (priority 1000)
+          eventBus.on('commandStack.shape.resize.canExecute', 2000, resizeRuleHandler);
+          eventBus.on('shape.resize.canExecute', 2000, resizeRuleHandler);
+        }
+
+        if (bpmnRules) {
+          bpmnRules.canResize = function(shape: any) {
+            return canShapeResize(shape);
+          };
+        }
+      } catch (err) {
+        console.warn('Could not inject Visio-style resize rules:', err);
+      }
 
       const scheduleBadgeRefresh = () => {
         if (rafId !== null) return;
@@ -638,6 +797,7 @@ g[data-element-id*="Flow"] tspan {
       setIsSaving(false);
     }
   };
+  saveActionRef.current = handleSave;
 
   // Export XML file
   const handleDownloadXml = async () => {
@@ -1161,6 +1321,44 @@ g[data-element-id*="Flow"] tspan {
               )}
             </div>
           </div>
+
+          {/* Group 3.5: Visio Shape Sizing Tools (Quick access) */}
+          {selectedElementsCount > 0 && (
+            <>
+              <div className="h-5 w-px bg-[#DDDBCF] hidden sm:block shrink-0" />
+              <div className="flex items-center gap-1 bg-[#EEF2FF] border border-[#C7D2FE] px-2 py-1 rounded-xl shadow-2xs shrink-0">
+                <span className="text-[11px] font-bold text-[#3730A3] hidden md:inline ml-1">
+                  تغییر اندازه شکل (ویزیو):
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleScaleSelected(1.15)}
+                  className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-indigo-50 text-[#3730A3] rounded-lg text-xs font-bold border border-[#C7D2FE] shadow-2xs transition cursor-pointer active:scale-95"
+                  title="بزرگ‌تر کردن شکل (+۱۵٪) - همچنین با کشیدن دستگیره‌های اطراف شکل نیز تغییر می‌کند"
+                >
+                  <Expand className="h-3.5 w-3.5" />
+                  <span>بزرگ‌تر</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleScaleSelected(0.85)}
+                  className="flex items-center gap-1 px-2 py-1 bg-white hover:bg-indigo-50 text-[#3730A3] rounded-lg text-xs font-bold border border-[#C7D2FE] shadow-2xs transition cursor-pointer active:scale-95"
+                  title="کوچک‌تر کردن شکل (-۱۵٪)"
+                >
+                  <Shrink className="h-3.5 w-3.5" />
+                  <span>کوچک‌تر</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetSelectedSize}
+                  className="px-2 py-1 bg-white hover:bg-indigo-50 text-[#4338CA] rounded-lg text-xs font-medium border border-[#C7D2FE] transition cursor-pointer active:scale-95"
+                  title="بازگشت به اندازه استاندارد شکل"
+                >
+                  اندازه استاندارد
+                </button>
+              </div>
+            </>
+          )}
 
           <div className="h-5 w-px bg-[#DDDBCF] hidden sm:block shrink-0" />
 

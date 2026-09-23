@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { ProcessedEraItem } from '../types';
 import { api } from '../services/api';
+import { RichTextDisplay } from './RichTextDisplay';
 
 interface EraSlideHoverPreviewProps {
   item: ProcessedEraItem;
@@ -426,15 +427,11 @@ export const EraSlideHoverPreview: React.FC<EraSlideHoverPreviewProps> = ({
                   <span>وضعیت قبل از اقدام:</span>
                 </div>
                 <div className="flex-1">
-                  {beforeText ? (
-                    <p className={`${slideBeforeAfterUnderImage ? 'text-[11px]' : 'text-xs sm:text-sm'} text-[#4A4944] leading-relaxed whitespace-pre-wrap font-medium`}>
-                      {beforeText}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-[#A8A69E] italic py-0.5">
-                      موردی برای قبل از اقدام ثبت نشده است.
-                    </p>
-                  )}
+                  <RichTextDisplay
+                    content={beforeText}
+                    className={`${slideBeforeAfterUnderImage ? 'text-[11px]' : 'text-xs sm:text-sm'} text-[#4A4944] font-medium`}
+                    fallbackText="موردی برای قبل از اقدام ثبت نشده است."
+                  />
                 </div>
               </div>
 
@@ -448,9 +445,10 @@ export const EraSlideHoverPreview: React.FC<EraSlideHoverPreviewProps> = ({
                   {afterSolutionText || achievementsList.length > 0 ? (
                     <div className="space-y-0.5">
                       {afterSolutionText && (
-                        <p className={`${slideBeforeAfterUnderImage ? 'text-[11px]' : 'text-xs sm:text-sm'} text-[#4A4944] leading-relaxed whitespace-pre-wrap font-medium`}>
-                          {afterSolutionText}
-                        </p>
+                        <RichTextDisplay
+                          content={afterSolutionText}
+                          className={`${slideBeforeAfterUnderImage ? 'text-[11px]' : 'text-xs sm:text-sm'} text-[#4A4944] font-medium`}
+                        />
                       )}
                       {achievementsList.length > 0 && (
                         <ul className="space-y-0.5 pt-0.5">

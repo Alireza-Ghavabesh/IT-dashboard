@@ -156,6 +156,9 @@ export interface RawEraItem {
   impactTimeMetric?: string;
   impactErrorMetric?: string;
   showImpactMetrics?: boolean;
+  hasBeforeImage?: boolean;
+  beforeImageUrl?: string;
+  beforeImages?: string[];
   isSelectedForSlide?: boolean;
   slideNumber?: number | null; // شماره و ترتیب اسلاید
   slideOrder?: number | null;
@@ -180,7 +183,9 @@ export interface ProcessedEraItem {
   createdAt: string;
   formImageUrl?: string; // Main screenshot/photo of the created form
   formImages?: string[]; // Multiple photos/screenshots of the created form
+  hasBeforeImage?: boolean; // آیا دارای عکس قبل از اصلاح است (اختیاری)
   beforeImageUrl?: string; // Optional photo of the legacy paper/system
+  beforeImages?: string[]; // Multiple photos/screenshots of legacy before-state
   afterImageUrl?: string; // Optional secondary screenshot of workflow
   isSelectedForSlide?: boolean; // Toggle switch for presentation slides mode
   slideNumber?: number | null; // شماره و اولویت ترتیب نمایش اسلاید

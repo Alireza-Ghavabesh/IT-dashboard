@@ -58,6 +58,9 @@ import {
   LayoutGrid,
   Maximize2,
   ArrowUpRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   Activity,
   Calendar,
   CalendarDays,
@@ -959,16 +962,90 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
     return Object.values(monthMap).sort((a, b) => a.month.localeCompare(b.month));
   }, [filteredLetters, allMonths, startDate, endDate]);
 
+  // --- Column Sorting State for Letters Table ---
+  const [sortColumn, setSortColumn] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const handleSort = (colKey: string) => {
+    if (sortColumn === colKey) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else {
+        setSortColumn(null);
+        setSortDirection('asc');
+      }
+    } else {
+      setSortColumn(colKey);
+      setSortDirection('asc');
+    }
+  };
+
+  const renderSortIndicator = (colKey: string) => {
+    if (sortColumn === colKey) {
+      return sortDirection === 'asc' ? (
+        <ArrowUp className="h-3 w-3 text-[#545D4B] shrink-0" />
+      ) : (
+        <ArrowDown className="h-3 w-3 text-[#545D4B] shrink-0" />
+      );
+    }
+    return <ArrowUpDown className="h-2.5 w-2.5 text-[#8A8880] opacity-40 group-hover:opacity-100 transition shrink-0" />;
+  };
+
+  const compareLettersByColumn = (a: ProcessedLetter, b: ProcessedLetter, col: string) => {
+    switch (col) {
+      case 'id': {
+        const idA = Number(a.letterId ?? a.id) || 0;
+        const idB = Number(b.letterId ?? b.id) || 0;
+        return idA - idB;
+      }
+      case 'actionType':
+        return (a.actionType || '').localeCompare(b.actionType || '', 'fa');
+      case 'cause':
+        return (a.cause || 'نامشخص').localeCompare(b.cause || 'نامشخص', 'fa');
+      case 'subject':
+        return (a.subject || '').localeCompare(b.subject || '', 'fa');
+      case 'orgUnit':
+        return (a.orgUnit || '').localeCompare(b.orgUnit || '', 'fa');
+      case 'creator': {
+        const creatorA = a.creatorRaw || resolveLetterCreatorAndUnit(a).name;
+        const creatorB = b.creatorRaw || resolveLetterCreatorAndUnit(b).name;
+        return creatorA.localeCompare(creatorB, 'fa');
+      }
+      case 'date':
+        return (a.dateStr || '').localeCompare(b.dateStr || '');
+      case 'status':
+        return (a.status || 'ثبت شده').localeCompare(b.status || 'ثبت شده', 'fa');
+      default:
+        return 0;
+    }
+  };
+
+  const sortedFilteredLetters = useMemo(() => {
+    if (!sortColumn) return filteredLetters;
+    return [...filteredLetters].sort((a, b) => {
+      const cmp = compareLettersByColumn(a, b, sortColumn);
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredLetters, sortColumn, sortDirection]);
+
+  const sortedServerLetters = useMemo(() => {
+    if (!sortColumn || !serverLetters.length) return serverLetters;
+    return [...serverLetters].sort((a, b) => {
+      const cmp = compareLettersByColumn(a, b, sortColumn);
+      return sortDirection === 'asc' ? cmp : -cmp;
+    });
+  }, [serverLetters, sortColumn, sortDirection]);
+
   // Paginated letters list (client vs server database mode adaptive)
   const clientTotalPages = Math.ceil(filteredLetters.length / pageSize) || 1;
   const paginatedLetters = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredLetters.slice(start, start + pageSize);
-  }, [filteredLetters, currentPage]);
+    return sortedFilteredLetters.slice(start, start + pageSize);
+  }, [sortedFilteredLetters, currentPage, pageSize]);
 
   const effectiveTotalLetters = filterExecutionMode === 'server' ? serverTotal : filteredLetters.length;
   const effectiveTotalPages = filterExecutionMode === 'server' ? serverTotalPages : clientTotalPages;
-  const displayedLetters = filterExecutionMode === 'server' ? serverLetters : paginatedLetters;
+  const displayedLetters = filterExecutionMode === 'server' ? sortedServerLetters : paginatedLetters;
 
   const handleResetFilters = () => {
     setSelectedUnits([]);
@@ -2875,17 +2952,89 @@ export const RemoveEditDashboard: React.FC<RemoveEditDashboardProps> = ({
           )}
           <table className="w-full text-xs text-right border-collapse">
             <thead>
-              <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF]">
-                <th className="py-3 px-3 text-center w-16">شناسه</th>
-                <th className="py-3 px-3 w-28">نوع مکاتبه</th>
+              <tr className="bg-[#EBEBE6] text-[#2D2C28] font-bold border-b border-[#DDDBCF] select-none">
+                <th
+                  onClick={() => handleSort('id')}
+                  className="py-3 px-3 text-center w-16 cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس شناسه"
+                >
+                  <div className="flex items-center justify-center gap-0.5">
+                    <span>شناسه</span>
+                    {renderSortIndicator('id')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('actionType')}
+                  className="py-3 px-3 w-28 cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس نوع مکاتبه"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span>نوع مکاتبه</span>
+                    {renderSortIndicator('actionType')}
+                  </div>
+                </th>
                 {isCauseColumnVisible && (
-                  <th className="py-3 px-3 w-28">عامل (منشأ)</th>
+                  <th
+                    onClick={() => handleSort('cause')}
+                    className="py-3 px-3 w-28 cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس عامل (منشأ)"
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span>عامل (منشأ)</span>
+                      {renderSortIndicator('cause')}
+                    </div>
+                  </th>
                 )}
-                <th className="py-3 px-3 min-w-[220px]">موضوع نامه</th>
-                <th className="py-3 px-3 min-w-[140px]">واحد سازمانی</th>
-                <th className="py-3 px-3 min-w-[150px]">ایجاد کننده</th>
-                <th className="py-3 px-3 w-28 text-center">تاریخ</th>
-                <th className="py-3 px-3 w-24 text-center">وضعیت</th>
+                <th
+                  onClick={() => handleSort('subject')}
+                  className="py-3 px-3 min-w-[220px] cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس موضوع نامه"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span>موضوع نامه</span>
+                    {renderSortIndicator('subject')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('orgUnit')}
+                  className="py-3 px-3 min-w-[140px] cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس واحد سازمانی"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span>واحد سازمانی</span>
+                    {renderSortIndicator('orgUnit')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('creator')}
+                  className="py-3 px-3 min-w-[150px] cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس ایجاد کننده"
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span>ایجاد کننده</span>
+                    {renderSortIndicator('creator')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('date')}
+                  className="py-3 px-3 w-28 text-center cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس تاریخ"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>تاریخ</span>
+                    {renderSortIndicator('date')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('status')}
+                  className="py-3 px-3 w-24 text-center cursor-pointer hover:bg-[#E2E2DC] transition group"
+                  title="مرتب‌سازی بر اساس وضعیت"
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    <span>وضعیت</span>
+                    {renderSortIndicator('status')}
+                  </div>
+                </th>
                 <th className="py-3 px-3 text-center w-20">عملیات</th>
               </tr>
             </thead>

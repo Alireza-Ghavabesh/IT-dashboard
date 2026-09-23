@@ -87,6 +87,23 @@ export const JalaliDateInput: React.FC<JalaliDateInputProps> = ({
     if (typeof window !== 'undefined' && (window as any).jalaliDatepicker) {
       try {
         (window as any).jalaliDatepicker.show(inputRef.current);
+        // Ensure datepicker never overflows viewport edges on wide screens
+        setTimeout(() => {
+          const container = document.querySelector('jdp-container') as HTMLElement;
+          if (container) {
+            const rect = container.getBoundingClientRect();
+            const padding = 12;
+            const vw = window.innerWidth;
+            if (rect.right > vw - padding) {
+              const overflow = rect.right - (vw - padding);
+              const currentLeft = parseFloat(container.style.left) || rect.left;
+              container.style.left = `${Math.max(padding, currentLeft - overflow)}px`;
+            }
+            if (rect.left < padding) {
+              container.style.left = `${padding}px`;
+            }
+          }
+        }, 10);
       } catch (err) {
         console.warn('Error showing jalaliDatepicker:', err);
       }
