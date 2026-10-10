@@ -37,7 +37,9 @@ import {
   FileSpreadsheet,
   CheckCircle,
   ExternalLink,
-  Plus
+  Plus,
+  XCircle,
+  Paperclip
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import {
@@ -47,6 +49,7 @@ import {
 } from '../data/presentationTemplates';
 import { api } from '../services/api';
 import { RichTextDisplay } from './RichTextDisplay';
+import { RejectionReasonModal } from './RejectionReasonModal';
 
 interface ProcessPresentationModalProps {
   isOpen: boolean;
@@ -78,6 +81,7 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
   // Lightbox Modal States
   const [isLightboxOpen, setIsLightboxOpen] = useState<boolean>(false);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState<boolean>(false);
   const [lightboxImageUrl, setLightboxImageUrl] = useState<string>('');
   const [lightboxTitle, setLightboxTitle] = useState<string>('');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -427,6 +431,60 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
                   <ImageIcon className="h-3.5 w-3.5 text-blue-600" />
                   <span>{formImages.length} تصویر پیوست</span>
                 </span>
+              )}
+
+              {/* Status Pill */}
+              <button
+                type="button"
+                onClick={item.status === 'رد شده' ? () => setIsRejectionModalOpen(true) : undefined}
+                className={`flex items-center gap-1 font-bold px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                  item.status === 'رد شده'
+                    ? 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100 cursor-pointer shadow-2xs'
+                    : item.status === 'برای انجام'
+                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                    : item.status === 'درحال انجام'
+                    ? 'bg-blue-50 text-blue-900 border-blue-300'
+                    : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                }`}
+                title={item.status === 'رد شده' ? 'کلیک برای نمایش پاپ‌آپ علت رد فرآیند' : `وضعیت: ${item.status || 'انجام شده'}`}
+              >
+                {item.status === 'رد شده' ? <XCircle className="h-3.5 w-3.5 text-rose-600" /> :
+                 item.status === 'برای انجام' ? <Clock className="h-3.5 w-3.5 text-amber-600" /> :
+                 item.status === 'درحال انجام' ? <TrendingUp className="h-3.5 w-3.5 text-blue-600" /> :
+                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                <span>وضعیت: {item.status || 'انجام شده'}</span>
+              </button>
+
+              {/* Rejection Reason Pill if rejected */}
+              {item.status === 'رد شده' && (item.rejectionReason || (item as any)["دلیل رد"]) && (
+                <button 
+                  type="button"
+                  onClick={() => setIsRejectionModalOpen(true)}
+                  className="flex items-center gap-1 font-bold px-2.5 py-1 rounded-lg bg-rose-100 hover:bg-rose-200 text-rose-900 border border-rose-300 max-w-[260px] truncate cursor-pointer transition-colors shadow-2xs text-xs"
+                  title={`کلیک برای مشاهده پاپ‌آپ دلیل رد:\n${item.rejectionReason || (item as any)["دلیل رد"]}`}
+                >
+                  <AlertTriangle className="h-3.5 w-3.5 text-rose-700 shrink-0" />
+                  <span className="truncate">دلیل رد: {item.rejectionReason || (item as any)["دلیل رد"]}</span>
+                </button>
+              )}
+
+              {/* Note File Attachment Pill */}
+              {(item.noteFile || (item as any)["فایل یادداشت"]) && (
+                (() => {
+                  const f = item.noteFile || (item as any)["فایل یادداشت"];
+                  return (
+                    <a
+                      href={f.data}
+                      download={f.name || 'note_attachment'}
+                      className="flex items-center gap-1 font-bold px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs transition-colors shadow-2xs cursor-pointer"
+                      title={`دانلود فایل یادداشت پیوست: ${f.name}\nحجم: ${(f.size / 1024).toFixed(1)} KB`}
+                    >
+                      <Paperclip className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+                      <span className="max-w-[150px] truncate dir-ltr">{f.name}</span>
+                      <Download className="h-3 w-3 text-amber-700" />
+                    </a>
+                  );
+                })()
               )}
             </div>
 
@@ -1066,6 +1124,13 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
         </div>
       )}
+
+      {/* Process Rejection Reason Popup Modal */}
+      <RejectionReasonModal
+        isOpen={isRejectionModalOpen}
+        item={item}
+        onClose={() => setIsRejectionModalOpen(false)}
+      />
     </>
   );
 };

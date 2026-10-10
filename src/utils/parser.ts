@@ -1081,6 +1081,13 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
 
     let status: EraProcessStatus = 'انجام شده';
     if (
+      rawStatus.includes('رد شده') ||
+      rawStatus.includes('ردشده') ||
+      rawStatus.toLowerCase().includes('reject') ||
+      rawStatus.toLowerCase().includes('declined')
+    ) {
+      status = 'رد شده';
+    } else if (
       rawStatus.includes('برای انجام') || 
       rawStatus.toLowerCase().includes('todo') || 
       rawStatus.toLowerCase().includes('pending')
@@ -1107,6 +1114,37 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       if (cachedStatus) {
         status = cachedStatus as any;
       }
+    }
+
+    // Reason for rejection if status is rejected
+    let rejectionReason: string | undefined = (
+      item.rejectionReason ||
+      rawAny["دلیل رد"] ||
+      rawAny["علت رد"] ||
+      rawAny["دلیل رد شدن"] ||
+      rawAny["rejectionReason"] ||
+      undefined
+    );
+    if (!rejectionReason && typeof window !== 'undefined') {
+      const cachedRej = localStorage.getItem(`era_rej_reason_${finalId}`) || localStorage.getItem(`era_rej_reason_${baseId}`);
+      if (cachedRej) rejectionReason = cachedRej;
+    }
+
+    // Process Note File attachment (pdf, xlsx, rar, zip)
+    let noteFile: any = (
+      item.noteFile ||
+      rawAny["noteFile"] ||
+      rawAny["فایل یادداشت"] ||
+      rawAny["فایل_یادداشت"] ||
+      undefined
+    );
+    if (!noteFile && typeof window !== 'undefined') {
+      try {
+        const cachedNote = localStorage.getItem(`era_notefile_${finalId}`) || localStorage.getItem(`era_notefile_${baseId}`);
+        if (cachedNote) {
+          noteFile = JSON.parse(cachedNote);
+        }
+      } catch {}
     }
 
     // Problem, Solution and Operational Achievements descriptions (custom presentation text)
@@ -1219,6 +1257,8 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       operationType,
       entityType,
       status,
+      rejectionReason,
+      noteFile: noteFile || null,
       description: description,
       createdAt: item.createdAt || new Date().toISOString(),
       formImageUrl: item.formImageUrl,

@@ -15,7 +15,8 @@ import {
   computeMonthlyMatrix,
   formatNumber,
   extractOrgUnit,
-  DEFAULT_EXCLUSION_RULES
+  DEFAULT_EXCLUSION_RULES,
+  getCurrentJalaliDate
 } from './utils/parser';
 import {
   RawLetterItem,
@@ -132,6 +133,7 @@ export default function App() {
             slideHoverPreview: parsed.slideHoverPreview ?? false,
             showAiChartAnalysis: parsed.showAiChartAnalysis ?? false,
             slideBeforeAfterUnderImage: parsed.slideBeforeAfterUnderImage ?? true,
+            maxNoteFileSizeMb: typeof parsed.maxNoteFileSizeMb === 'number' && parsed.maxNoteFileSizeMb > 0 ? parsed.maxNoteFileSizeMb : 10,
             columnVisibility: {
               ...DEFAULT_ERA_COLUMN_VISIBILITY,
               ...(parsed.columnVisibility || {})
@@ -148,6 +150,7 @@ export default function App() {
       slideHoverPreview: false,
       showAiChartAnalysis: false,
       slideBeforeAfterUnderImage: true,
+      maxNoteFileSizeMb: 10,
       columnVisibility: { ...DEFAULT_ERA_COLUMN_VISIBILITY }
     };
   });
@@ -191,6 +194,7 @@ export default function App() {
         executionDate: val,
         operationType: val,
         status: val,
+        noteFile: val,
         description: val,
         bpmn: val,
         slideFullscreen: val,
@@ -820,14 +824,16 @@ export default function App() {
         processName: item.processName || '',
         "واحد سازمانی": item.orgUnit || '',
         orgUnit: item.orgUnit || '',
-        "تاریخ انجام": item.executionDate || '1405/04/15',
-        executionDate: item.executionDate || '1405/04/15',
+        "تاریخ انجام": item.executionDate || getCurrentJalaliDate().str,
+        executionDate: item.executionDate || getCurrentJalaliDate().str,
         "نوع عملیات": item.operationType || 'اصلاح',
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
         entityType: item.entityType || 'فرآیند',
         "وضعیت": item.status || 'برای انجام',
         status: item.status || 'برای انجام',
+        "دلیل رد": item.rejectionReason,
+        rejectionReason: item.rejectionReason,
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -852,14 +858,16 @@ export default function App() {
         processName: item.processName || '',
         "واحد سازمانی": item.orgUnit || '',
         orgUnit: item.orgUnit || '',
-        "تاریخ انجام": item.executionDate || '1405/04/15',
-        executionDate: item.executionDate || '1405/04/15',
+        "تاریخ انجام": item.executionDate || getCurrentJalaliDate().str,
+        executionDate: item.executionDate || getCurrentJalaliDate().str,
         "نوع عملیات": item.operationType || 'اصلاح',
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
         entityType: item.entityType || 'فرآیند',
         "وضعیت": item.status || 'برای انجام',
         status: item.status || 'برای انجام',
+        "دلیل رد": item.rejectionReason,
+        rejectionReason: item.rejectionReason,
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -917,6 +925,8 @@ export default function App() {
             entityType: updatedEntityType,
             "وضعیت": updatedStatus,
             status: updatedStatus,
+            "دلیل رد": item.rejectionReason !== undefined ? item.rejectionReason : (item.status === 'رد شده' ? (p.rejectionReason || p["دلیل رد"]) : undefined),
+            rejectionReason: item.rejectionReason !== undefined ? item.rejectionReason : (item.status === 'رد شده' ? (p.rejectionReason || p["دلیل رد"]) : undefined),
             "توضیحات": updatedDesc,
             description: updatedDesc,
             isSelectedForSlide: item.isSelectedForSlide !== undefined ? item.isSelectedForSlide : p.isSelectedForSlide,
@@ -942,10 +952,21 @@ export default function App() {
       });
     });
 
-    if (item.id && item.status) {
-      try {
-        localStorage.setItem(`era_status_${item.id}`, item.status);
-      } catch {}
+    if (item.id) {
+      if (item.status) {
+        try {
+          localStorage.setItem(`era_status_${item.id}`, item.status);
+        } catch {}
+      }
+      if (item.status === 'رد شده' && item.rejectionReason) {
+        try {
+          localStorage.setItem(`era_rej_reason_${item.id}`, item.rejectionReason);
+        } catch {}
+      } else if (item.status && item.status !== 'رد شده') {
+        try {
+          localStorage.removeItem(`era_rej_reason_${item.id}`);
+        } catch {}
+      }
     }
 
     try {
@@ -1165,6 +1186,7 @@ export default function App() {
           }}
           initialItem={slideEditingItem}
           existingUnits={Array.from(allOrganizationalUnits)}
+          maxFileSizeMb={eraVisibility?.maxNoteFileSizeMb ?? 10}
           onOpenBpmnDesigner={(item) => {
             setSlideEditingItem(null);
             setBpmnEditingItem(item);

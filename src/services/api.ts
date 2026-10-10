@@ -251,12 +251,12 @@ export const api = {
     }
   },
 
-  async updateEraStatus(id: string, status: string): Promise<any> {
+  async updateEraStatus(id: string, status: string, rejectionReason?: string): Promise<any> {
     try {
       const res = await fetch(`/api/era/${encodeURIComponent(id)}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        body: JSON.stringify({ status, rejectionReason })
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));

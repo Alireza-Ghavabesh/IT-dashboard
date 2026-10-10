@@ -47,7 +47,9 @@ import {
   Image as ImageIcon,
   ImageOff,
   Presentation,
-  Workflow
+  Workflow,
+  Paperclip,
+  FileText
 } from 'lucide-react';
 import { CauseRule, ExclusionRule, ProcessedLetter, EraVisibilitySettings, EraColumnVisibility, DEFAULT_ERA_COLUMN_VISIBILITY } from '../types';
 import { classifyLetterCause, isLetterExcluded, formatNumber } from '../utils/parser';
@@ -3053,6 +3055,70 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Note File Attachment Settings Box (تنظیم محدودیت حجم فایل یادداشت) */}
+                <div className="mt-4 p-4 rounded-xl bg-white border border-[#DDDBCF] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 shrink-0 mt-0.5">
+                      <Paperclip className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[#2D2C28] text-xs">
+                          محدودیت حجم فایل یادداشت پیوست فرآیند
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                          فرمت‌های مجاز: PDF ، XLSX ، RAR ، ZIP
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#75746E] mt-1 leading-relaxed">
+                        حداکثر سقف مجاز برای بارگذاری هر فایل یادداشت در فرم ثبت و ویرایش فرآیند. فایل‌های بالاتر از این حجم مجاز نخواهند بود.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Size Controller / Selector */}
+                  <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                    {[5, 10, 20, 50].map((sizeMb) => {
+                      const isCurrent = (eraVisibility.maxNoteFileSizeMb ?? 10) === sizeMb;
+                      return (
+                        <button
+                          key={sizeMb}
+                          type="button"
+                          onClick={() => {
+                            if (onToggleEraVisibility) {
+                              onToggleEraVisibility('maxNoteFileSizeMb' as any, sizeMb as any);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl font-bold text-xs transition cursor-pointer border ${
+                            isCurrent
+                              ? 'bg-[#545D4B] text-white border-[#545D4B] shadow-xs'
+                              : 'bg-[#FAFAF7] hover:bg-[#EFEFEA] text-[#2D2C28] border-[#DDDBCF]'
+                          }`}
+                        >
+                          {sizeMb} مگابایت
+                        </button>
+                      );
+                    })}
+
+                    <div className="flex items-center gap-1 border-r border-[#E2E0D8] pr-2 mr-1">
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={eraVisibility.maxNoteFileSizeMb ?? 10}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val) && val > 0 && onToggleEraVisibility) {
+                            onToggleEraVisibility('maxNoteFileSizeMb' as any, val as any);
+                          }
+                        }}
+                        className="w-16 px-2 py-1 bg-white border border-[#DDDBCF] rounded-lg text-xs font-mono font-bold text-center text-[#2D2C28] focus:outline-none focus:ring-1 focus:ring-[#545D4B]"
+                      />
+                      <span className="text-[11px] text-[#75746E] font-medium">MB</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Card: Dynamic Column Visibility for Process (ERA) Table */}
@@ -3068,11 +3134,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                           مدیریت پویای نمایش تک‌تک ستون‌های جدول فرآیندها (Column Visibility)
                         </h3>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                          کنترل ۱۲ ستون جدول
+                          کنترل ۱۳ ستون جدول
                         </span>
                       </div>
                       <p className="text-xs text-[#75746E] mt-1 leading-relaxed font-medium">
-                        قابلیت فعال یا غیرفعال کردن نمایش هریک از ستون‌های جدول فرآیندها (شامل ستون BPMN، اسلاید، وضعیت، تاریخ، شرح و سایر موارد) به انتخاب کاربر.
+                        قابلیت فعال یا غیرفعال کردن نمایش هریک از ستون‌های جدول فرآیندها (شامل ستون BPMN، اسلاید، وضعیت، فایل یادداشت، تاریخ، شرح و سایر موارد) به انتخاب کاربر.
                       </p>
                     </div>
                   </div>
@@ -3109,7 +3175,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     { key: 'orgUnit' as const, label: 'واحد سازمانی', desc: 'دپارتمان یا واحد متولی سازمانی', icon: HardDrive },
                     { key: 'executionDate' as const, label: 'تاریخ انجام', desc: 'تاریخ ثبت و انجام عملیات فرآیندی', icon: Info },
                     { key: 'operationType' as const, label: 'نوع عملیات', desc: 'جدید، اصلاح یا اتوماتیک‌سازی', icon: Tag },
-                    { key: 'status' as const, label: 'وضعیت انجام', desc: 'انجام شده، درحال انجام، برای انجام', icon: CheckCircle2 },
+                    { key: 'status' as const, label: 'وضعیت انجام', desc: 'انجام شده، درحال انجام، برای انجام، رد شده', icon: CheckCircle2 },
+                    { key: 'noteFile' as const, label: 'فایل یادداشت (پیوست)', desc: 'نمایش و دانلود فایل یادداشت (pdf/xlsx/rar/zip)', icon: Paperclip },
                     { key: 'description' as const, label: 'شرح و توضیحات', desc: 'خلاصه متن تغییرات و شرح اقدامات', icon: Edit2 },
                     { key: 'bpmn' as const, label: 'دیاگرام BPMN (مدل‌ساز)', desc: 'دکمه بازکردن ویرایشگر دیاگرام BPMN', icon: Workflow },
                     { key: 'slideFullscreen' as const, label: 'نمایش اسلاید', desc: 'دکمه مشاهده اسلاید تمام‌صفحه و هاور', icon: Presentation },

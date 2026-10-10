@@ -319,31 +319,107 @@ a[href*="bpmn.io"],
   overflow: hidden !important;
 }
 
-/* Rich Text Content Formatting Styles */
-.rich-text-content ul {
+/* Rich Text Content & Editor Canvas Formatting Styles */
+.rich-text-content,
+.rich-text-editor-canvas {
+  direction: rtl;
+  text-align: right;
+}
+
+.rich-text-content ul,
+.rich-text-editor-canvas ul {
   list-style-type: disc !important;
-  margin-right: 1.25rem !important;
-  margin-top: 0.25rem !important;
-  margin-bottom: 0.25rem !important;
+  list-style-position: outside !important;
+  padding-right: 1.5rem !important;
+  padding-left: 0 !important;
+  margin-right: 0.25rem !important;
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
 }
 
-.rich-text-content ol {
+.rich-text-content ol,
+.rich-text-editor-canvas ol {
   list-style-type: decimal !important;
-  margin-right: 1.25rem !important;
-  margin-top: 0.25rem !important;
+  list-style-position: outside !important;
+  padding-right: 1.5rem !important;
+  padding-left: 0 !important;
+  margin-right: 0.25rem !important;
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.4rem !important;
+}
+
+.rich-text-content li,
+.rich-text-editor-canvas li {
+  display: list-item !important;
   margin-bottom: 0.25rem !important;
+  line-height: 1.6 !important;
 }
 
-.rich-text-content li {
-  margin-bottom: 0.15rem !important;
+.rich-text-content h1,
+.rich-text-editor-canvas h1 {
+  font-size: 1.35rem !important;
+  font-weight: 800 !important;
+  margin-top: 0.6rem !important;
+  margin-bottom: 0.4rem !important;
+  line-height: 1.4 !important;
+  color: inherit;
 }
 
-.rich-text-content p {
+.rich-text-content h2,
+.rich-text-editor-canvas h2 {
+  font-size: 1.15rem !important;
+  font-weight: 800 !important;
+  margin-top: 0.5rem !important;
   margin-bottom: 0.35rem !important;
+  line-height: 1.4 !important;
+  color: inherit;
 }
 
-.rich-text-content p:last-child {
+.rich-text-content h3,
+.rich-text-editor-canvas h3 {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  margin-top: 0.4rem !important;
+  margin-bottom: 0.25rem !important;
+  line-height: 1.4 !important;
+  color: inherit;
+}
+
+.rich-text-content p,
+.rich-text-editor-canvas p {
+  margin-bottom: 0.35rem !important;
+  line-height: 1.6 !important;
+}
+
+.rich-text-content p:last-child,
+.rich-text-editor-canvas p:last-child {
   margin-bottom: 0 !important;
+}
+
+.rich-text-content b,
+.rich-text-content strong,
+.rich-text-editor-canvas b,
+.rich-text-editor-canvas strong {
+  font-weight: 700 !important;
+}
+
+.rich-text-content i,
+.rich-text-content em,
+.rich-text-editor-canvas i,
+.rich-text-editor-canvas em {
+  font-style: italic !important;
+}
+
+.rich-text-content u,
+.rich-text-editor-canvas u {
+  text-decoration: underline !important;
+}
+
+.rich-text-content s,
+.rich-text-content strike,
+.rich-text-editor-canvas s,
+.rich-text-editor-canvas strike {
+  text-decoration: line-through !important;
 }
 
 

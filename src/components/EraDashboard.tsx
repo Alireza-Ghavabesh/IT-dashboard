@@ -4,6 +4,7 @@ import { ProcessedEraItem, EraVisibilitySettings, EraColumnVisibility } from '..
 import { MetricCard } from './MetricCard';
 import { EraFormModal } from './EraFormModal';
 import { ProcessPresentationModal } from './ProcessPresentationModal';
+import { RejectionReasonModal } from './RejectionReasonModal';
 import { SlideshowView } from './SlideshowView';
 import { EraSlideHoverPreview } from './EraSlideHoverPreview';
 import { AiChartAnalysisModal } from './AiChartAnalysisModal';
@@ -48,9 +49,16 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Clock,
+  XCircle,
+  Eye,
   Calendar,
   CalendarDays,
-  CalendarRange
+  CalendarRange,
+  Paperclip,
+  FileText,
+  FileArchive,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -119,6 +127,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       'executionDate',
       'operationType',
       'status',
+      'noteFile',
       'description',
       'bpmn',
       'slideFullscreen',
@@ -131,6 +140,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [selectedOpType, setSelectedOpType] = useState<string>('all');
   const [selectedEntityType, setSelectedEntityType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [noteFileFilter, setNoteFileFilter] = useState<'all' | 'with-file' | 'without-file'>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [isDateFilterOpen, setIsDateFilterOpen] = useState<boolean>(false);
@@ -196,6 +206,15 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [activeBpmnItem, setActiveBpmnItem] = useState<ProcessedEraItem | null>(null);
   const [isBpmnModalOpen, setIsBpmnModalOpen] = useState<boolean>(false);
   const [bpmnFilter, setBpmnFilter] = useState<'all' | 'with-bpmn' | 'without-bpmn'>('all');
+
+  // Process Rejection Reason Popup Modal State
+  const [rejectionModalItem, setRejectionModalItem] = useState<ProcessedEraItem | null>(null);
+  const [isRejectionModalOpen, setIsRejectionModalOpen] = useState<boolean>(false);
+
+  const handleOpenRejectionReason = (item: ProcessedEraItem) => {
+    setRejectionModalItem(item);
+    setIsRejectionModalOpen(true);
+  };
 
   // Slide Hover Popup Preview Settings (Controlled via Settings Modal) & Hover State
   const isSlideHoverPreviewEnabled = eraVisibility?.slideHoverPreview ?? false;
@@ -534,9 +553,24 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       if (bpmnFilter === 'without-bpmn' && (item.hasBpmn || item.bpmnXml)) {
         return false;
       }
+      if (noteFileFilter === 'with-file' && !item.noteFile && !(item as any)["فایل یادداشت"]) {
+        return false;
+      }
+      if (noteFileFilter === 'without-file' && (item.noteFile || (item as any)["فایل یادداشت"])) {
+        return false;
+      }
       return true;
     });
-  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, startDate, endDate, searchQuery, bpmnFilter]);
+  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, startDate, endDate, searchQuery, bpmnFilter, noteFileFilter]);
+
+  // Note file counts
+  const withNoteFileCount = useMemo(() => {
+    return eraItems.filter(item => Boolean(item.noteFile || (item as any)["فایل یادداشت"])).length;
+  }, [eraItems]);
+
+  const withoutNoteFileCount = useMemo(() => {
+    return eraItems.filter(item => !item.noteFile && !(item as any)["فایل یادداشت"]).length;
+  }, [eraItems]);
 
   // BPMN counts for filter options
   const withBpmnCount = useMemo(() => {
@@ -560,6 +594,10 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     return eraItems.filter(item => (item.status || 'انجام شده') === 'انجام شده').length;
   }, [eraItems]);
 
+  const rejectedCount = useMemo(() => {
+    return eraItems.filter(item => (item.status || 'انجام شده') === 'رد شده').length;
+  }, [eraItems]);
+
   // Count active filters
   const activeFiltersCount = useMemo(() => {
     return [
@@ -567,18 +605,20 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       selectedOpType !== 'all',
       selectedEntityType !== 'all',
       selectedStatus !== 'all',
+      noteFileFilter !== 'all',
       slideFilter !== 'all',
       bpmnFilter !== 'all',
       searchQuery.trim().length > 0,
       Boolean(startDate || endDate)
     ].filter(Boolean).length;
-  }, [selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, bpmnFilter, searchQuery, startDate, endDate]);
+  }, [selectedUnit, selectedOpType, selectedEntityType, selectedStatus, noteFileFilter, slideFilter, bpmnFilter, searchQuery, startDate, endDate]);
 
   const handleResetAllFilters = () => {
     setSelectedUnit('all');
     setSelectedOpType('all');
     setSelectedEntityType('all');
     setSelectedStatus('all');
+    setNoteFileFilter('all');
     setSlideFilter('all');
     setBpmnFilter('all');
     setSearchQuery('');
@@ -624,6 +664,12 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         case 'status':
           comparison = (a.status || 'انجام شده').localeCompare(b.status || 'انجام شده', 'fa');
           break;
+        case 'noteFile': {
+          const hasA = a.noteFile || (a as any)["فایل یادداشت"] ? 1 : 0;
+          const hasB = b.noteFile || (b as any)["فایل یادداشت"] ? 1 : 0;
+          comparison = hasA - hasB;
+          break;
+        }
         case 'description':
           comparison = (a.description || '').localeCompare(b.description || '', 'fa');
           break;
@@ -2062,6 +2108,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                 <CheckCircle2 className="w-3 h-3" />
                 <span>انجام شده ({formatNumber(doneCount)})</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus(prev => prev === 'رد شده' ? 'all' : 'رد شده')}
+                className={`px-2 py-1 rounded-lg transition cursor-pointer flex items-center gap-1 ${
+                  selectedStatus === 'رد شده'
+                    ? 'bg-rose-600 text-white shadow-xs'
+                    : 'text-[#615F59] hover:text-rose-700'
+                }`}
+                title="فیلتر وضعیت: رد شده"
+              >
+                <XCircle className="w-3 h-3" />
+                <span>رد شده ({formatNumber(rejectedCount)})</span>
+              </button>
             </div>
 
             {/* دکمه ثبت فرآیند جدید - رو به روی نوشته جدول جامع اقدامات */}
@@ -2208,6 +2267,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                     <div className="flex items-center justify-center gap-1">
                       <span>وضعیت</span>
                       {renderSortIndicator('status')}
+                    </div>
+                  </th>
+                )}
+                {isColVisible('noteFile') && (
+                  <th
+                    onClick={() => handleSort('noteFile')}
+                    className="py-2.5 px-2 min-w-[105px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس داشتن فایل یادداشت"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Paperclip className="h-3.5 w-3.5 text-[#545D4B]" />
+                      <span>فایل یادداشت</span>
+                      {renderSortIndicator('noteFile')}
                     </div>
                   </th>
                 )}
@@ -2635,6 +2707,23 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                       <option value="برای انجام">برای انجام ({todoCount})</option>
                       <option value="درحال انجام">درحال انجام ({inProgressCount})</option>
                       <option value="انجام شده">انجام شده ({doneCount})</option>
+                      <option value="رد شده">رد شده ({rejectedCount})</option>
+                    </select>
+                  </th>
+                )}
+
+                {/* Note File Filter */}
+                {isColVisible('noteFile') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={noteFileFilter}
+                      onChange={e => setNoteFileFilter(e.target.value as any)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                      title="فیلتر فایل یادداشت"
+                    >
+                      <option value="all">همه</option>
+                      <option value="with-file">دارای فایل ({withNoteFileCount})</option>
+                      <option value="without-file">بدون فایل ({withoutNoteFileCount})</option>
                     </select>
                   </th>
                 )}
@@ -2743,21 +2832,8 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                           onClick={() => handleOpenEdit(item)}
                           title={`مشاهده و ویرایش فرآیند: ${item.processName}`}
                         >
-                          <div className="flex flex-wrap items-center gap-1.5 break-words">
+                          <div className="flex items-center break-words">
                             <span className="hover:underline">{item.processName}</span>
-                            {hasImage && (
-                              <span 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenPresentation(item);
-                                }}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[9px] font-normal hover:bg-blue-100 transition cursor-pointer whitespace-nowrap"
-                                title="این فرآیند دارای تصویر اسکرین‌شات پیوست است"
-                              >
-                                <ImageIcon className="h-2.5 w-2.5 text-blue-600" />
-                                <span>تصویر پیوست</span>
-                              </span>
-                            )}
                           </div>
                         </td>
                       )}
@@ -2808,28 +2884,92 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                         </td>
                       )}
 
-                      {/* 7. Status Column with quick switch dropdown */}
+                      {/* 7. Status Column (Display badge only, no dropdown; 'رد شده' opens RejectionReasonModal) */}
                       {isColVisible('status') && (
-                        <td className="py-2.5 px-2 text-center" onClick={e => e.stopPropagation()}>
-                          <div className="relative inline-block text-center">
-                            <select
-                              value={itemStatus}
-                              onChange={(e) => handleQuickStatusChange(item, e.target.value as any, e)}
-                              className={`appearance-none px-2.5 py-0.5 pr-5 pl-2 text-[10px] font-bold rounded-full border cursor-pointer transition shadow-2xs focus:outline-none focus:ring-1 focus:ring-offset-1 text-center ${
-                                itemStatus === 'برای انجام'
-                                  ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 focus:ring-amber-500'
-                                  : itemStatus === 'درحال انجام'
-                                  ? 'bg-blue-50 text-blue-900 border-blue-300 hover:bg-blue-100 focus:ring-blue-500'
-                                  : 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 focus:ring-emerald-500'
-                              }`}
-                              title="تغییر سریع وضعیت فرآیند (برای انجام / درحال انجام / انجام شده)"
-                            >
-                              <option value="برای انجام">برای انجام</option>
-                              <option value="درحال انجام">درحال انجام</option>
-                              <option value="انجام شده">انجام شده</option>
-                            </select>
-                            <ChevronDown className="w-2.5 h-2.5 absolute left-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60" />
+                        <td className="py-2.5 px-2 text-center">
+                          <div className="inline-flex flex-col items-center gap-0.5">
+                            {itemStatus === 'رد شده' ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenRejectionReason(item);
+                                }}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[10px] font-bold rounded-full border shadow-2xs select-none bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100 hover:border-rose-400 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+                                title="کلیک برای نمایش پاپ‌آپ علت رد فرآیند"
+                              >
+                                <XCircle className="w-2.5 h-2.5 text-rose-600 shrink-0 group-hover:rotate-12 transition-transform" />
+                                <span>رد شده</span>
+                                <Eye className="w-2.5 h-2.5 text-rose-500 opacity-70 group-hover:opacity-100" />
+                              </button>
+                            ) : (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full border shadow-2xs select-none ${
+                                  itemStatus === 'برای انجام'
+                                    ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                    : itemStatus === 'درحال انجام'
+                                    ? 'bg-blue-50 text-blue-900 border-blue-300'
+                                    : 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                }`}
+                                title={`وضعیت: ${itemStatus}`}
+                              >
+                                {itemStatus === 'برای انجام' ? (
+                                  <Clock className="w-2.5 h-2.5 text-amber-700 shrink-0" />
+                                ) : itemStatus === 'درحال انجام' ? (
+                                  <TrendingUp className="w-2.5 h-2.5 text-blue-700 shrink-0" />
+                                ) : (
+                                  <CheckCircle2 className="w-2.5 h-2.5 text-emerald-700 shrink-0" />
+                                )}
+                                <span>{itemStatus}</span>
+                              </span>
+                            )}
+                            {itemStatus === 'رد شده' && (item.rejectionReason || (item as any)["دلیل رد"]) && (
+                              <button 
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenRejectionReason(item);
+                                }}
+                                className="text-[9px] text-rose-600 max-w-[125px] truncate font-bold cursor-pointer px-1.5 py-0.5 bg-rose-50/80 hover:bg-rose-100 rounded border border-rose-200/70 hover:border-rose-300 transition-colors block text-center"
+                                title={`کلیک برای مشاهده کامل دلیل رد:\n${item.rejectionReason || (item as any)["دلیل رد"]}`}
+                              >
+                                {item.rejectionReason || (item as any)["دلیل رد"]}
+                              </button>
+                            )}
                           </div>
+                        </td>
+                      )}
+
+                      {/* Note File Column (دانلود و مشاهده فایل یادداشت پیوست فرآیند) */}
+                      {isColVisible('noteFile') && (
+                        <td className="py-2.5 px-2 text-center">
+                          {item.noteFile || (item as any)["فایل یادداشت"] ? (
+                            (() => {
+                              const f = item.noteFile || (item as any)["فایل یادداشت"];
+                              const ext = (f.name || '').split('.').pop()?.toLowerCase();
+                              return (
+                                <a
+                                  href={f.data}
+                                  download={f.name || 'note_attachment'}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 hover:border-amber-400 transition shadow-2xs cursor-pointer group"
+                                  title={`دانلود فایل یادداشت: ${f.name}\nحجم: ${(f.size / 1024).toFixed(1)} KB`}
+                                >
+                                  {ext === 'pdf' ? (
+                                    <FileText className="w-3 h-3 text-rose-600 shrink-0" />
+                                  ) : ext === 'xlsx' || ext === 'xls' ? (
+                                    <FileSpreadsheet className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  ) : (
+                                    <FileArchive className="w-3 h-3 text-amber-600 shrink-0" />
+                                  )}
+                                  <span className="max-w-[70px] truncate dir-ltr">{f.name}</span>
+                                  <Download className="w-2.5 h-2.5 text-amber-700 opacity-60 group-hover:opacity-100" />
+                                </a>
+                              );
+                            })()
+                          ) : (
+                            <span className="text-[#A09E96] text-[10px] select-none">—</span>
+                          )}
                         </td>
                       )}
 
@@ -3058,6 +3198,20 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         }}
       />
 
+      {/* Process Rejection Reason Popup Modal */}
+      <RejectionReasonModal
+        isOpen={isRejectionModalOpen}
+        item={rejectionModalItem}
+        onClose={() => {
+          setIsRejectionModalOpen(false);
+          setRejectionModalItem(null);
+        }}
+        onEdit={(item) => {
+          setIsRejectionModalOpen(false);
+          handleOpenEdit(item);
+        }}
+      />
+
       {/* Manual Entry & Edit Modal */}
       <EraFormModal
         isOpen={isModalOpen}
@@ -3075,6 +3229,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         initialItem={editingItem}
         existingUnits={allUnits}
         existingProcesses={allProcesses}
+        maxFileSizeMb={eraVisibility?.maxNoteFileSizeMb ?? 10}
         onOpenBpmnDesigner={(item) => {
           setIsModalOpen(false);
           setActiveBpmnItem(item);

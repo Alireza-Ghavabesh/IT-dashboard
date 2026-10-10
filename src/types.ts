@@ -80,7 +80,7 @@ export type LetterActionType = 'حذف' | 'ویرایش';
 
 export type EraOperationType = 'جدید' | 'اصلاح' | 'اتوماتیک‌سازی' | 'اتوماتیک سازی' | string;
 export type EraEntityType = 'فرم' | 'فرآیند' | 'گزارش' | string;
-export type EraProcessStatus = 'برای انجام' | 'درحال انجام' | 'انجام شده' | string;
+export type EraProcessStatus = 'برای انجام' | 'درحال انجام' | 'انجام شده' | 'رد شده' | string;
 
 export interface CauseRule {
   id: string;
@@ -139,6 +139,14 @@ export interface ProcessedLetter {
   note?: string | null;
 }
 
+export interface EraNoteFile {
+  name: string;
+  size: number;
+  type?: string;
+  data: string; // Base64 data URI or data string
+  uploadedAt?: string;
+}
+
 export interface RawEraItem {
   "نام فرایند": string;
   "واحد سازمانی": string;
@@ -148,6 +156,10 @@ export interface RawEraItem {
   entityType?: EraEntityType;
   "وضعیت"?: EraProcessStatus;
   status?: EraProcessStatus;
+  "دلیل رد"?: string;
+  rejectionReason?: string;
+  "فایل یادداشت"?: EraNoteFile | null;
+  noteFile?: EraNoteFile | null;
   توضیحات: string;
   problemDescription?: string;
   solutionDescription?: string;
@@ -179,6 +191,8 @@ export interface ProcessedEraItem {
   operationType: EraOperationType;
   entityType?: EraEntityType;
   status?: EraProcessStatus;
+  rejectionReason?: string;
+  noteFile?: EraNoteFile | null; // فایل یادداشت پیوست فرآیند (pdf, xlsx, rar, zip)
   description: string;
   createdAt: string;
   formImageUrl?: string; // Main screenshot/photo of the created form
@@ -253,6 +267,7 @@ export interface EraColumnVisibility {
   executionDate: boolean;   // تاریخ انجام
   operationType: boolean;   // نوع عملیات
   status: boolean;          // وضعیت
+  noteFile: boolean;        // فایل یادداشت پیوست
   description: boolean;     // توضیحات و شرح تغییرات
   bpmn: boolean;            // دیاگرام BPMN
   slideFullscreen: boolean; // نمایش اسلاید
@@ -268,6 +283,7 @@ export const DEFAULT_ERA_COLUMN_VISIBILITY: EraColumnVisibility = {
   executionDate: true,
   operationType: true,
   status: true,
+  noteFile: true,
   description: true,
   bpmn: true,
   slideFullscreen: true,
@@ -283,6 +299,7 @@ export interface EraVisibilitySettings {
   slideHoverPreview: boolean; // نمایش پاپ‌آپ اسلاید هنگام رفتن ماوس روی دکمه نمایش اسلاید (۸۰٪ صفحه)
   showAiChartAnalysis?: boolean; // نمایش دکمه تحلیل هوش مصنوعی از موثرترین کارها در هدر نمودار میله‌ای (پیش‌فرض: غیرفعال)
   slideBeforeAfterUnderImage?: boolean; // نمایش متن وضعیت قبل و بعد زیر عکس‌ها (پیش‌فرض: فعال / true) یا در تب جداگانه (false)
+  maxNoteFileSizeMb?: number; // حداکثر حجم مجاز آپلود فایل یادداشت (مگابایت) - پیش‌فرض ۱۰ مگابایت
   columnVisibility?: EraColumnVisibility; // کنترل پویای نمایش یا عدم نمایش تک‌تک ستون‌های جدول فرآیندها
 }
 

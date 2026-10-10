@@ -622,6 +622,10 @@ async function startServer() {
           entityType: item.entityType || raw.entityType || raw["نوع موجودیت"] || 'فرآیند',
           "وضعیت": raw.status || raw["وضعیت"] || 'انجام شده',
           status: raw.status || raw["وضعیت"] || 'انجام شده',
+          rejectionReason: raw.rejectionReason || raw["دلیل رد"] || undefined,
+          "دلیل رد": raw.rejectionReason || raw["دلیل رد"] || undefined,
+          noteFile: raw.noteFile || raw["فایل یادداشت"] || undefined,
+          "فایل یادداشت": raw.noteFile || raw["فایل یادداشت"] || undefined,
           "توضیحات": item.description !== undefined ? item.description : (raw["توضیحات"] || raw.description || ''),
           description: item.description !== undefined ? item.description : (raw["توضیحات"] || raw.description || ''),
           formImageUrl: formImages[0] || raw.formImageUrl || undefined,
@@ -1068,7 +1072,7 @@ async function startServer() {
   app.patch('/api/era/:id/status', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, rejectionReason } = req.body;
       if (!status) {
         return res.status(400).json({ success: false, error: 'Status is required' });
       }
@@ -1098,7 +1102,9 @@ async function startServer() {
 
       const updatedRaw = {
         ...existingRaw,
-        status: String(status).trim()
+        status: String(status).trim(),
+        rejectionReason: rejectionReason !== undefined ? rejectionReason : existingRaw.rejectionReason,
+        "دلیل رد": rejectionReason !== undefined ? rejectionReason : existingRaw["دلیل رد"]
       };
 
       const updated = await prisma.eraProcess.update({

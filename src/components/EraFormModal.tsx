@@ -15,6 +15,7 @@ import {
   CheckCircle2, 
   TrendingUp,
   Clock,
+  XCircle,
   Gauge,
   Eye,
   EyeOff,
@@ -23,11 +24,17 @@ import {
   Star,
   ListOrdered,
   GripVertical,
-  Workflow
+  Workflow,
+  Paperclip,
+  FileText,
+  Download,
+  FileArchive,
+  FileSpreadsheet
 } from 'lucide-react';
-import { ProcessedEraItem, RawEraItem } from '../types';
+import { ProcessedEraItem, RawEraItem, EraNoteFile } from '../types';
 import { JalaliDateInput } from './JalaliDateInput';
 import { RichTextEditor } from './RichTextEditor';
+import { getCurrentJalaliDate } from '../utils/parser';
 
 interface EraFormModalProps {
   isOpen: boolean;
@@ -36,6 +43,7 @@ interface EraFormModalProps {
   initialItem?: ProcessedEraItem | null;
   existingUnits?: string[];
   existingProcesses?: string[];
+  maxFileSizeMb?: number;
   onOpenBpmnDesigner?: (item: ProcessedEraItem) => void;
 }
 
@@ -46,14 +54,16 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   initialItem,
   existingUnits = [],
   existingProcesses = [],
+  maxFileSizeMb = 10,
   onOpenBpmnDesigner
 }) => {
   const [processName, setProcessName] = useState('');
   const [orgUnit, setOrgUnit] = useState('');
-  const [executionDate, setExecutionDate] = useState('1405/04/15');
+  const [executionDate, setExecutionDate] = useState(() => getCurrentJalaliDate().str);
   const [operationType, setOperationType] = useState<'جدید' | 'اصلاح' | 'اتوماتیک‌سازی'>('اصلاح');
   const [entityType, setEntityType] = useState<'فرم' | 'فرآیند' | 'گزارش'>('فرآیند');
-  const [status, setStatus] = useState<'برای انجام' | 'درحال انجام' | 'انجام شده'>('برای انجام');
+  const [status, setStatus] = useState<'برای انجام' | 'درحال انجام' | 'انجام شده' | 'رد شده'>('برای انجام');
+  const [rejectionReason, setRejectionReason] = useState('');
   const [description, setDescription] = useState('');
   const [problemDescription, setProblemDescription] = useState('');
   const [solutionDescription, setSolutionDescription] = useState('');
@@ -72,14 +82,20 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   const [formImages, setFormImages] = useState<string[]>([]);
   const [draggedImgIdx, setDraggedImgIdx] = useState<number | null>(null);
   const [dragOverImgIdx, setDragOverImgIdx] = useState<number | null>(null);
+  const [editorColumnsMode, setEditorColumnsMode] = useState<'2cols' | '1col'>('2cols');
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Note File Attachment State (PDF, XLSX, RAR, ZIP)
+  const [noteFile, setNoteFile] = useState<EraNoteFile | null>(null);
+  const [isUploadingNote, setIsUploadingNote] = useState<boolean>(false);
+  const noteFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (initialItem) {
       setProcessName(initialItem.processName);
       setOrgUnit(initialItem.orgUnit);
-      setExecutionDate(initialItem.executionDate);
+      setExecutionDate(initialItem.executionDate || getCurrentJalaliDate().str);
       
       const op = (initialItem.operationType || '').trim();
       if (op.includes('اتوماتیک') || op.includes('اوتوماتیک') || op.includes('اتوماسیون')) {
@@ -100,7 +116,9 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       }
 
       const st = (initialItem.status || (initialItem as any)["وضعیت"] || '').trim();
-      if (st.includes('برای انجام') || st.toLowerCase().includes('todo')) {
+      if (st.includes('رد شده') || st.includes('ردشده') || st.toLowerCase().includes('reject')) {
+        setStatus('رد شده');
+      } else if (st.includes('برای انجام') || st.toLowerCase().includes('todo')) {
         setStatus('برای انجام');
       } else if (st.includes('درحال انجام') || st.includes('در حال انجام') || st.toLowerCase().includes('in-progress')) {
         setStatus('درحال انجام');
@@ -108,12 +126,19 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         setStatus('انجام شده');
       } else {
         const cachedSt = typeof window !== 'undefined' ? localStorage.getItem(`era_status_${initialItem.id}`) : null;
-        if (cachedSt === 'برای انجام' || cachedSt === 'درحال انجام' || cachedSt === 'انجام شده') {
-          setStatus(cachedSt);
+        if (cachedSt === 'برای انجام' || cachedSt === 'درحال انجام' || cachedSt === 'انجام شده' || cachedSt === 'رد شده') {
+          setStatus(cachedSt as any);
         } else {
           setStatus('انجام شده');
         }
       }
+
+      const savedRej = initialItem.rejectionReason 
+        || (initialItem as any)["دلیل رد"] 
+        || (initialItem as any)["علت رد"] 
+        || (typeof window !== 'undefined' ? localStorage.getItem(`era_rej_reason_${initialItem.id}`) : '')
+        || '';
+      setRejectionReason(savedRej);
 
       setDescription(initialItem.description);
       
@@ -226,25 +251,43 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         }
       }
       setBeforeImages(loadedBeforeImgs);
+
+      // Load note file attachment if present
+      let loadedNoteFile: EraNoteFile | null = null;
+      if (initialItem.noteFile) {
+        loadedNoteFile = initialItem.noteFile;
+      } else if ((initialItem as any)["فایل یادداشت"]) {
+        loadedNoteFile = (initialItem as any)["فایل یادداشت"];
+      } else if (typeof window !== 'undefined') {
+        try {
+          const cachedNote = localStorage.getItem(`era_notefile_${initialItem.id}`) || localStorage.getItem(`era_notefile_${initialItem.processName}`);
+          if (cachedNote) {
+            loadedNoteFile = JSON.parse(cachedNote);
+          }
+        } catch {}
+      }
+      setNoteFile(loadedNoteFile);
     } else {
       setProcessName('');
       setOrgUnit(existingUnits[0] || 'فروش');
-      setExecutionDate('1405/04/15');
+      setExecutionDate(getCurrentJalaliDate().str);
       setOperationType('اصلاح');
       setEntityType('فرآیند');
       setStatus('برای انجام');
+      setRejectionReason('');
       setDescription('');
       setProblemDescription('');
       setSolutionDescription('');
       setAchievements('');
-      setShowAchievements(true);
+      setShowAchievements(false);
       setImpactTimeMetric('');
       setImpactErrorMetric('');
-      setShowImpactMetrics(true);
+      setShowImpactMetrics(false);
       setSlideNumber('');
       setHasBeforeImage(false);
       setBeforeImages([]);
       setFormImages([]);
+      setNoteFile(null);
     }
     setError(null);
   }, [initialItem, isOpen, existingUnits]);
@@ -365,6 +408,56 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
     setDragOverImgIdx(null);
   };
 
+  const handleNoteFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check extension
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const allowedExts = ['pdf', 'xlsx', 'xls', 'rar', 'zip'];
+    if (!ext || !allowedExts.includes(ext)) {
+      setError(`فرمت فایل انتخابی مجاز نیست. لطفاً یکی از فرمت‌های pdf، xlsx، rar یا zip را انتخاب فرمایید.`);
+      if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+      return;
+    }
+
+    // Check size limit from props (maxFileSizeMb)
+    const maxBytes = maxFileSizeMb * 1024 * 1024;
+    if (file.size > maxBytes) {
+      const actualMb = (file.size / (1024 * 1024)).toFixed(1);
+      setError(`حجم فایل انتخابی (${actualMb} مگابایت) بیشتر از سقف مجاز تعیین شده در تنظیمات (${maxFileSizeMb} مگابایت) است. لطفاً فایل کم‌حجم‌تری انتخاب کنید یا سقف مجاز را در تنظیمات افزایش دهید.`);
+      if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+      return;
+    }
+
+    setIsUploadingNote(true);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      setNoteFile({
+        name: file.name,
+        size: file.size,
+        type: file.type || ext,
+        data: dataUri,
+        uploadedAt: getCurrentJalaliDate().str
+      });
+      setIsUploadingNote(false);
+      if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+    };
+    reader.onerror = () => {
+      setError('خطا در خواندن فایل یادداشت. لطفاً دوباره تلاش کنید.');
+      setIsUploadingNote(false);
+      if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveNoteFile = () => {
+    setNoteFile(null);
+    if (noteFileInputRef.current) noteFileInputRef.current.value = '';
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!processName.trim()) {
@@ -381,6 +474,10 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
     }
     if (!description.trim()) {
       setError('لطفاً توضیحات تغییرات فرآیندی را ثبت کنید.');
+      return;
+    }
+    if (status === 'رد شده' && !rejectionReason.trim()) {
+      setError('وضعیت فرآیند روی «رد شده» تنظیم شده است؛ لطفاً دلیل رد را به صورت اجباری وارد کنید.');
       return;
     }
 
@@ -435,6 +532,16 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
           localStorage.removeItem(`era_slide_num_${savedId}`);
         }
         localStorage.setItem(`era_status_${savedId}`, status);
+        if (status === 'رد شده' && rejectionReason.trim()) {
+          localStorage.setItem(`era_rej_reason_${savedId}`, rejectionReason.trim());
+        } else {
+          localStorage.removeItem(`era_rej_reason_${savedId}`);
+        }
+        if (noteFile) {
+          localStorage.setItem(`era_notefile_${savedId}`, JSON.stringify(noteFile));
+        } else {
+          localStorage.removeItem(`era_notefile_${savedId}`);
+        }
       } catch (e) {
         console.warn('Could not cache data in localStorage', e);
       }
@@ -448,6 +555,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       operationType,
       entityType,
       status,
+      rejectionReason: status === 'رد شده' ? rejectionReason.trim() : undefined,
+      noteFile: noteFile || null,
       description: description.trim(),
       problemDescription: problemDescription.trim() || undefined,
       solutionDescription: solutionDescription.trim() || undefined,
@@ -557,14 +666,24 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
 
               {/* Execution Date (Span 3 on large screens) */}
               <div className="lg:col-span-3">
-                <label className="block font-bold text-[#4B5344] mb-1.5">
-                  تاریخ انجام (شمسی): *
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-bold text-[#4B5344]">
+                    تاریخ انجام (شمسی): *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setExecutionDate(getCurrentJalaliDate().str)}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-900 font-bold hover:underline cursor-pointer"
+                    title="تنظیم تاریخ به امروز"
+                  >
+                    امروز ({getCurrentJalaliDate().str})
+                  </button>
+                </div>
                 <JalaliDateInput
                   value={executionDate}
                   onChange={setExecutionDate}
-                  placeholder="1405/03/28"
-                  inputClassName="px-3.5 py-2.5 rounded-xl text-xs"
+                  placeholder={getCurrentJalaliDate().str}
+                  inputClassName="px-3.5 py-2.5 rounded-xl text-xs font-bold font-mono"
                 />
               </div>
             </div>
@@ -655,11 +774,12 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 </div>
               </div>
 
-              {/* Process Status (وضعیت فرآیند: برای انجام | درحال انجام | انجام شده) */}
+              {/* Process Status (وضعیت فرآیند: برای انجام | درحال انجام | انجام شده | رد شده) */}
               <div>
                 <label className="block font-bold text-[#4B5344] mb-1.5 flex items-center justify-between">
                   <span>وضعیت فرآیند: *</span>
                   <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                    status === 'رد شده' ? 'text-rose-900 bg-rose-100 border-rose-300' :
                     status === 'برای انجام' ? 'text-amber-800 bg-amber-100 border-amber-300' :
                     status === 'درحال انجام' ? 'text-blue-800 bg-blue-100 border-blue-300' :
                     'text-emerald-800 bg-emerald-100 border-emerald-300'
@@ -667,7 +787,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     {status}
                   </span>
                 </label>
-                <div className="grid grid-cols-3 gap-1.5 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-2 xl:grid-cols-4 gap-1.5 bg-[#EBEBE6] p-1 rounded-xl border border-[#DDDBCF]">
                   <button
                     type="button"
                     onClick={() => setStatus('برای انجام')}
@@ -707,9 +827,78 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate">انجام شده</span>
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('رد شده')}
+                    className={`py-2 px-1 rounded-lg font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1 ${
+                      status === 'رد شده'
+                        ? 'bg-rose-600 text-white shadow-xs ring-2 ring-rose-400'
+                        : 'text-rose-700 hover:text-rose-900 hover:bg-rose-100/70'
+                    }`}
+                    title="رد شده"
+                  >
+                    <XCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">رد شده</span>
+                  </button>
                 </div>
               </div>
             </div>
+
+            {/* Rejection Reason - Prominent Red Box (دلیل رد - اجباری در صورت انتخاب وضعیت رد شده) */}
+            {status === 'رد شده' && (
+              <div className="pt-3 border-t-2 border-rose-300">
+                <div className="bg-rose-50/90 border-2 border-rose-400 rounded-2xl p-4 shadow-sm space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-rose-200 pb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 bg-rose-600 text-white rounded-lg shadow-2xs">
+                        <XCircle className="w-4 h-4" />
+                      </div>
+                      <label htmlFor="rejectionReasonInput" className="font-extrabold text-sm text-rose-950 flex items-center gap-2">
+                        <span>دلیل رد فرآیند / اقدام:</span>
+                        <span className="text-[10px] font-bold bg-rose-600 text-white px-2 py-0.5 rounded-full shadow-2xs">
+                          اجباری *
+                        </span>
+                      </label>
+                    </div>
+                    <span className="text-xs text-rose-700 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span>ثبت دلیل رد برای این فرآیند الزامی است</span>
+                    </span>
+                  </div>
+
+                  <div>
+                    <textarea
+                      id="rejectionReasonInput"
+                      rows={2}
+                      value={rejectionReason}
+                      onChange={e => {
+                        setRejectionReason(e.target.value);
+                        if (error && error.includes('دلیل رد')) {
+                          setError(null);
+                        }
+                      }}
+                      placeholder="علت و دلیل رد شدن این فرآیند را به طور شفاف توضیح دهید (مثلاً: عدم تطابق با دستورالعمل مصوب، عدم تایید مدیر مافوق، خطای ساختاری و...)"
+                      className={`w-full text-xs font-medium bg-white border-2 rounded-xl p-3 text-rose-950 placeholder-rose-300 focus:outline-none focus:ring-2 focus:ring-rose-500 transition leading-relaxed resize-y min-h-[75px] ${
+                        !rejectionReason.trim() && error
+                          ? 'border-rose-600 ring-2 ring-rose-400 bg-rose-50/40'
+                          : 'border-rose-300 focus:border-rose-600'
+                      }`}
+                      required
+                    />
+                    {!rejectionReason.trim() ? (
+                      <p className="mt-1 text-[11px] font-bold text-rose-700 flex items-center gap-1">
+                        * این فیلد اجباری است و در فهرست فرآیندها به همراه نشان وضعیت قرمز نمایش داده خواهد شد.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[11px] font-semibold text-emerald-700 flex items-center gap-1">
+                        <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>دلیل رد آماده ذخیره‌سازی است.</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Description & Change Details */}
@@ -722,9 +911,147 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="شرح دقیق دسترسی، فرمت چاپی، فیلدهای اضافه شده یا تغییر ساختار گردش کار..."
-              className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl p-3 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition leading-relaxed"
+              className="w-full text-xs bg-[#F5F5F0] border border-[#DDDBCF] rounded-xl p-3 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] focus:bg-white transition leading-relaxed resize-y min-h-[90px]"
               required
             />
+          </div>
+
+          {/* Note File Attachment Section (پیوست فایل یادداشت با فرمت‌های pdf, xlsx, rar, zip) */}
+          <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-[#DDDBCF] space-y-3 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2 border-b border-[#E8E6DF]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 border border-amber-200">
+                  <Paperclip className="h-4 w-4" />
+                </div>
+                <div>
+                  <label className="font-bold text-[#2D2C28] text-xs sm:text-sm flex items-center gap-2">
+                    <span>پیوست فایل یادداشت فرآیند</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EAE8DE] text-[#545D4B] border border-[#DDDBCF]">
+                      اختیاری
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-[#75746E] mt-0.5">
+                    فرمت‌های مجاز: <strong className="text-[#2D2C28]">PDF</strong> ، <strong className="text-[#2D2C28]">XLSX</strong> ، <strong className="text-[#2D2C28]">RAR</strong> ، <strong className="text-[#2D2C28]">ZIP</strong> • سقف مجاز حجم: <strong className="text-amber-800">{maxFileSizeMb} مگابایت</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Upload trigger button */}
+              <div>
+                <input
+                  ref={noteFileInputRef}
+                  type="file"
+                  accept=".pdf,.xlsx,.xls,.rar,.zip,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,application/x-rar-compressed,application/octet-stream,application/zip,application/x-zip-compressed"
+                  className="hidden"
+                  onChange={handleNoteFileChange}
+                />
+                {!noteFile ? (
+                  <button
+                    type="button"
+                    onClick={() => noteFileInputRef.current?.click()}
+                    disabled={isUploadingNote}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-[#F5F4EE] text-[#545D4B] hover:text-[#2D2C28] text-xs font-bold rounded-xl border border-[#DDDBCF] transition shadow-2xs cursor-pointer disabled:opacity-50"
+                  >
+                    <UploadCloud className="h-4 w-4 text-amber-700" />
+                    <span>{isUploadingNote ? 'در حال بارگذاری فایل...' : 'انتخاب و بارگذاری فایل یادداشت'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => noteFileInputRef.current?.click()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#F5F4EE] text-[#545D4B] text-xs font-bold rounded-xl border border-[#DDDBCF] transition shadow-2xs cursor-pointer"
+                  >
+                    <UploadCloud className="h-3.5 w-3.5" />
+                    <span>تغییر فایل</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Note File Display Card */}
+            {noteFile ? (
+              <div className="bg-white rounded-xl p-3.5 border border-amber-300 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                    noteFile.name.toLowerCase().endsWith('.pdf')
+                      ? 'bg-rose-50 text-rose-700 border-rose-200'
+                      : noteFile.name.toLowerCase().endsWith('.xlsx') || noteFile.name.toLowerCase().endsWith('.xls')
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border-amber-200'
+                  }`}>
+                    {noteFile.name.toLowerCase().endsWith('.pdf') ? (
+                      <FileText className="h-5 w-5" />
+                    ) : noteFile.name.toLowerCase().endsWith('.xlsx') || noteFile.name.toLowerCase().endsWith('.xls') ? (
+                      <FileSpreadsheet className="h-5 w-5" />
+                    ) : (
+                      <FileArchive className="h-5 w-5" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs sm:text-sm text-[#2D2C28] truncate dir-ltr text-right" title={noteFile.name}>
+                        {noteFile.name}
+                      </span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md border uppercase ${
+                        noteFile.name.toLowerCase().endsWith('.pdf')
+                          ? 'bg-rose-100 text-rose-800 border-rose-200'
+                          : noteFile.name.toLowerCase().endsWith('.xlsx') || noteFile.name.toLowerCase().endsWith('.xls')
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          : 'bg-amber-100 text-amber-800 border-amber-200'
+                      }`}>
+                        {noteFile.name.split('.').pop()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-3 text-[11px] text-[#75746E] mt-0.5">
+                      <span>حجم: <strong className="font-mono text-[#2D2C28]">{(noteFile.size / 1024).toFixed(1)} KB</strong></span>
+                      {noteFile.uploadedAt && <span>تاریخ ثبت: <strong className="font-mono">{noteFile.uploadedAt}</strong></span>}
+                      <span className="text-emerald-700 font-bold flex items-center gap-0.5">
+                        <Check className="h-3 w-3" />
+                        <span>پیوست آماده ذخیره</span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
+                  <a
+                    href={noteFile.data}
+                    download={noteFile.name}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                    title="دانلود و مشاهده فایل"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>دانلود فایل</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleRemoveNoteFile}
+                    className="p-1.5 text-rose-600 hover:bg-rose-50 hover:text-rose-800 rounded-lg transition cursor-pointer"
+                    title="حذف فایل پیوست"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={() => noteFileInputRef.current?.click()}
+                className="border-2 border-dashed border-[#DDDBCF] hover:border-amber-400 bg-white hover:bg-amber-50/30 rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center gap-1.5 group"
+              >
+                <div className="w-8 h-8 rounded-full bg-[#F5F4EE] group-hover:bg-amber-100 text-[#75746E] group-hover:text-amber-800 flex items-center justify-center transition">
+                  <UploadCloud className="h-4 w-4" />
+                </div>
+                <div className="text-xs font-bold text-[#5A5852] group-hover:text-[#2D2C28]">
+                  برای بارگذاری فایل یادداشت اینجا کلیک کنید
+                </div>
+                <div className="text-[10px] text-[#8A8880]">
+                  پشتیبانی از اسناد PDF ، اکسل XLSX ، فشرده RAR و ZIP (حداکثر تا {maxFileSizeMb} مگابایت بر اساس تنظیمات)
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Custom Slide Presentation Text (Problem & Solution / Before & After) */}
@@ -735,44 +1062,70 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 <span>متن‌های اختصاصی پرزنتیشن و نمایش اسلایدی (تحلیل چالش و راهکار):</span>
               </div>
               
-              {/* Slide Number / Order Input */}
-              <div className="flex items-center gap-2 bg-blue-50/90 px-3 py-1.5 rounded-xl border border-blue-200">
-                <ListOrdered className="h-3.5 w-3.5 text-blue-700" />
-                <label className="text-xs font-bold text-blue-900 whitespace-nowrap">
-                  شماره اسلاید:
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="999"
-                  value={slideNumber}
-                  onChange={e => {
-                    const v = e.target.value;
-                    if (v === '') {
-                      setSlideNumber('');
-                    } else {
-                      const n = parseInt(v, 10);
-                      setSlideNumber(!isNaN(n) && n > 0 ? n : '');
-                    }
-                  }}
-                  placeholder="خودکار"
-                  className="w-16 text-center text-xs font-mono font-bold bg-white border border-blue-300 rounded-lg py-1 px-1.5 text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  title="شماره دلخواه اسلاید در پرزنتیشن (مثلاً ۱، ۲، ۳...)"
-                />
-                {slideNumber !== '' && (
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* 1-Col vs 2-Col Layout Switcher */}
+                <div className="flex items-center gap-1 bg-white p-0.5 rounded-xl border border-[#DDDBCF] text-[10px] font-bold">
                   <button
                     type="button"
-                    onClick={() => setSlideNumber('')}
-                    className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
-                    title="حذف شماره اختصاصی و بازگشت به حالت خودکار"
+                    onClick={() => setEditorColumnsMode('2cols')}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                      editorColumnsMode === '2cols' ? 'bg-[#545D4B] text-white shadow-2xs' : 'text-[#615F59] hover:text-[#2D2C28]'
+                    }`}
+                    title="نمایش دو کادر در دو ستون کنار هم"
                   >
-                    پاک
+                    ۲ ستونه
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => setEditorColumnsMode('1col')}
+                    className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                      editorColumnsMode === '1col' ? 'bg-[#545D4B] text-white shadow-2xs' : 'text-[#615F59] hover:text-[#2D2C28]'
+                    }`}
+                    title="نمایش کادرها به صورت تمام‌عرض زیر هم برای فضای بسیار بزرگ‌تر و نوشتن متون طولانی"
+                  >
+                    تمام‌عرض (بزرگ‌تر)
+                  </button>
+                </div>
+
+                {/* Slide Number / Order Input */}
+                <div className="flex items-center gap-2 bg-blue-50/90 px-3 py-1.5 rounded-xl border border-blue-200">
+                  <ListOrdered className="h-3.5 w-3.5 text-blue-700" />
+                  <label className="text-xs font-bold text-blue-900 whitespace-nowrap">
+                    شماره اسلاید:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={slideNumber}
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (v === '') {
+                        setSlideNumber('');
+                      } else {
+                        const n = parseInt(v, 10);
+                        setSlideNumber(!isNaN(n) && n > 0 ? n : '');
+                      }
+                    }}
+                    placeholder="خودکار"
+                    className="w-16 text-center text-xs font-mono font-bold bg-white border border-blue-300 rounded-lg py-1 px-1.5 text-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    title="شماره دلخواه اسلاید در پرزنتیشن (مثلاً ۱، ۲، ۳...)"
+                  />
+                  {slideNumber !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setSlideNumber('')}
+                      className="text-[10px] text-rose-600 hover:text-rose-800 font-bold hover:underline cursor-pointer"
+                      title="حذف شماره اختصاصی و بازگشت به حالت خودکار"
+                    >
+                      پاک
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={editorColumnsMode === '2cols' ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'flex flex-col gap-5'}>
               {/* Problem / Before (Right column in slide) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
@@ -781,7 +1134,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     <span>مشکل و چالش شناسایی‌شده (ستون قرمز / قبل از اصلاح):</span>
                   </label>
                   <span className="text-[10px] text-rose-800 bg-rose-100/80 px-2 py-0.5 rounded-md border border-rose-200 font-bold">
-                    ویرایشگر پیشرفته فونت و رنگ
+                    ویرایشگر پیشرفته با قابلیت تغییر اندازه
                   </span>
                 </div>
                 <RichTextEditor
@@ -795,11 +1148,11 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                       : 'مثال: وجود باگ و مغایرت در ثبت، عدم دسترسی کاربران شعبه یا کندی در گردش‌کار قبلی...'
                   }
                   variant="rose"
-                  minHeight="120px"
-                  maxHeight="260px"
+                  minHeight="140px"
+                  maxHeight="none"
                 />
                 <span className="text-[11px] text-rose-700/80 block">
-                  این متن در اسلاید با کارت هشدار قرمز و قالب‌بندی انتخابی شما (سایز، رنگ، لیست و استایل) نمایش داده می‌شود.
+                  این متن در اسلاید با کارت هشدار قرمز و قالب‌بندی انتخابی شما (سرتیتر، لیست نقطه‌ای و شماره‌دار، سایز و رنگ) نمایش داده می‌شود.
                 </span>
               </div>
 
@@ -811,7 +1164,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     <span>راهکار پیاده‌سازی‌شده در سامانه (ستون سبز / راهکار فناوری اطلاعات):</span>
                   </label>
                   <span className="text-[10px] text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200 font-bold">
-                    ویرایشگر پیشرفته فونت و رنگ
+                    ویرایشگر پیشرفته با قابلیت تغییر اندازه
                   </span>
                 </div>
                 <RichTextEditor
@@ -825,8 +1178,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                       : 'مثال: تیم فناوری اطلاعات با ایجاد دسترسی اختصاصی، اصلاح قالب چاپ و بازطراحی فرم مشکل را برطرف نمود...'
                   }
                   variant="emerald"
-                  minHeight="120px"
-                  maxHeight="260px"
+                  minHeight="140px"
+                  maxHeight="none"
                 />
                 <span className="text-[11px] text-emerald-700/80 block">
                   این متن در اسلاید با کارت موفقیت سبز و قالب‌بندی انتخابی شما نمایش داده می‌شود.
@@ -835,19 +1188,24 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
             </div>
 
             {/* Operational Achievements / Results (دستاوردها و نتایج عملیاتی فرآیند) */}
-            <div className={`p-4 rounded-2xl border transition-all ${showAchievements ? 'bg-emerald-50/70 border-emerald-300' : 'bg-slate-100/80 border-slate-300'}`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-emerald-200/70">
+            <div className={`p-4 rounded-2xl border transition-all ${showAchievements ? 'bg-emerald-50/70 border-emerald-300' : 'bg-[#F7F7F4] border-[#DDDBCF]'}`}>
+              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${showAchievements ? 'pb-3 border-b border-emerald-200/70' : ''}`}>
                 <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-emerald-700" />
-                  <label className="font-black text-emerald-950 text-xs sm:text-sm">
+                  <TrendingUp className={`h-4 w-4 ${showAchievements ? 'text-emerald-700' : 'text-[#615F59]'}`} />
+                  <label className={`font-black text-xs sm:text-sm ${showAchievements ? 'text-emerald-950' : 'text-[#2D2C28]'}`}>
                     دستاوردها و نتایج عملیاتی فرآیند
                   </label>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    showAchievements ? 'bg-emerald-200 text-emerald-900' : 'bg-[#E5E5DF] text-[#615F59]'
+                  }`}>
+                    {showAchievements ? 'فعال در اسلاید' : 'پیش‌فرض غیرفعال'}
+                  </span>
                 </div>
 
                 {/* Toggle Switch for Achievements Box Visibility */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[11px] font-bold text-emerald-900">
-                    {showAchievements ? 'نمایش باکس در اسلاید فعال است' : 'باکس در اسلاید مخفی است'}
+                  <span className={`text-[11px] font-bold ${showAchievements ? 'text-emerald-900' : 'text-[#75746E]'}`}>
+                    {showAchievements ? 'نمایش باکس در اسلاید فعال است' : 'غیرفعال (مخفی در اسلاید)'}
                   </span>
                   <button
                     type="button"
@@ -857,6 +1215,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       showAchievements ? 'bg-emerald-600' : 'bg-slate-300'
                     }`}
+                    title={showAchievements ? 'غیرفعال‌سازی دستاوردها' : 'فعال‌سازی دستاوردها'}
                   >
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
@@ -867,75 +1226,94 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 </div>
               </div>
 
-              <div className="space-y-2 pt-3">
-                <div className="flex items-center justify-between text-[11px] text-emerald-900">
-                  <span className="font-semibold">متن دستاوردها (هر مورد در یک سطر با کلید Enter):</span>
-                  <span className="text-[10px] text-[#75746E]">
-                    در اسلاید با علامت تیک سبز ✓ لیست می‌شوند
-                  </span>
-                </div>
-                <textarea
-                  rows={4}
-                  value={achievements}
-                  onChange={e => setAchievements(e.target.value)}
-                  placeholder={
-                    '✓ کاهش زمان تأیید و پرداخت حواله ارزی از ۳ روز کاری به کمتر از ۳ ساعت\n✓ شفافیت ۱۰۰٪ تاریخچه تاییدات و پیوست اسناد سوئیفت و تراستی\n✓ حذف کامل خطاهای محاسباتی در نرخ تسعیر و سرفصل‌های ارزی\n✓ گزارش‌گیری لحظه‌ای برای مدیران از کل تعهدات و پرداختی‌های ارزی شرکت'
-                  }
-                  className="w-full text-xs bg-white border border-emerald-300 rounded-xl p-3 text-[#2D2C28] placeholder:text-[#9A9890] focus:outline-none focus:ring-2 focus:ring-emerald-500 transition leading-relaxed font-medium"
-                />
+              {showAchievements ? (
+                <div className="space-y-2 pt-3">
+                  <div className="flex items-center justify-between text-[11px] text-emerald-900">
+                    <span className="font-semibold">متن دستاوردها (هر مورد در یک سطر با کلید Enter):</span>
+                    <span className="text-[10px] text-[#75746E]">
+                      در اسلاید با علامت تیک سبز ✓ لیست می‌شوند
+                    </span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={achievements}
+                    onChange={e => setAchievements(e.target.value)}
+                    placeholder={
+                      '✓ کاهش زمان تأیید و پرداخت حواله ارزی از ۳ روز کاری به کمتر از ۳ ساعت\n✓ شفافیت ۱۰۰٪ تاریخچه تاییدات و پیوست اسناد سوئیفت و تراستی\n✓ حذف کامل خطاهای محاسباتی در نرخ تسعیر و سرفصل‌های ارزی\n✓ گزارش‌گیری لحظه‌ای برای مدیران از کل تعهدات و پرداختی‌های ارزی شرکت'
+                    }
+                    className="w-full text-xs bg-white border border-emerald-300 rounded-xl p-3 text-[#2D2C28] placeholder:text-[#9A9890] focus:outline-none focus:ring-2 focus:ring-emerald-500 transition leading-relaxed font-medium"
+                  />
 
-                {/* Predefined Templates / Sample text helper buttons */}
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <span className="text-[11px] text-emerald-800 font-bold">درج سریع نمونه متن:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAchievements(
-                        'کاهش زمان تأیید و پرداخت حواله ارزی از ۳ روز کاری به کمتر از ۳ ساعت\nشفافیت ۱۰۰٪ تاریخچه تاییدات و پیوست اسناد سوئیفت و تراستی\nحذف کامل خطاهای محاسباتی در نرخ تسعیر و سرفصل‌های ارزی\nگزارش‌گیری لحظه‌ای برای مدیران از کل تعهدات و پرداختی‌های ارزی شرکت'
-                      );
-                    }}
-                    className="px-2.5 py-1 text-[10px] font-bold bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100/70 rounded-lg transition cursor-pointer shadow-2xs"
-                  >
-                    + نمونه حواله ارزی و مالی
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAchievements(
-                        'تسریع بیش از ۷۰٪ در گردش کار و حذف کامل فرآیندهای کاغذی\nثبت مکانیزه لاگ زمانی و کاربر تاییدکننده در تمامی مراحل\nدسترسی برخط مدیران به سوابق، اسناد پیوست و گزارش‌ها'
-                      );
-                    }}
-                    className="px-2.5 py-1 text-[10px] font-bold bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100/70 rounded-lg transition cursor-pointer shadow-2xs"
-                  >
-                    + نمونه فرآیند عمومی
-                  </button>
-                  {achievements && (
+                  {/* Predefined Templates / Sample text helper buttons */}
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <span className="text-[11px] text-emerald-800 font-bold">درج سریع نمونه متن:</span>
                     <button
                       type="button"
-                      onClick={() => setAchievements('')}
-                      className="px-2.5 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-100/70 rounded-lg transition cursor-pointer ml-auto"
+                      onClick={() => {
+                        setAchievements(
+                          'کاهش زمان تأیید و پرداخت حواله ارزی از ۳ روز کاری به کمتر از ۳ ساعت\nشفافیت ۱۰۰٪ تاریخچه تاییدات و پیوست اسناد سوئیفت و تراستی\nحذف کامل خطاهای محاسباتی در نرخ تسعیر و سرفصل‌های ارزی\nگزارش‌گیری لحظه‌ای برای مدیران از کل تعهدات و پرداختی‌های ارزی شرکت'
+                        );
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-bold bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100/70 rounded-lg transition cursor-pointer shadow-2xs"
                     >
-                      پاک کردن متن
+                      + نمونه حواله ارزی و مالی
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAchievements(
+                          'تسریع بیش از ۷۰٪ در گردش کار و حذف کامل فرآیندهای کاغذی\nثبت مکانیزه لاگ زمانی و کاربر تاییدکننده در تمامی مراحل\nدسترسی برخط مدیران به سوابق، اسناد پیوست و گزارش‌ها'
+                        );
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-bold bg-white text-emerald-800 border border-emerald-300 hover:bg-emerald-100/70 rounded-lg transition cursor-pointer shadow-2xs"
+                    >
+                      + نمونه فرآیند عمومی
+                    </button>
+                    {achievements && (
+                      <button
+                        type="button"
+                        onClick={() => setAchievements('')}
+                        className="px-2.5 py-1 text-[10px] font-bold text-rose-700 hover:bg-rose-100/70 rounded-lg transition cursor-pointer ml-auto"
+                      >
+                        پاک کردن متن
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="pt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[#75746E]">
+                  <span>این بخش به صورت پیش‌فرض غیرفعال است و کادر دستاوردها در اسلاید مخفی می‌باشد.</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowAchievements(true)}
+                    className="text-emerald-700 hover:text-emerald-900 font-bold text-xs hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    فعال‌سازی و افزودن دستاورد
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Impact Metrics (شاخص‌های اثرگذاری فرآیند) */}
-            <div className={`p-4 rounded-2xl border transition-all ${showImpactMetrics ? 'bg-amber-50/70 border-amber-300' : 'bg-slate-100/80 border-slate-300'}`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-200/70">
+            <div className={`p-4 rounded-2xl border transition-all ${showImpactMetrics ? 'bg-amber-50/70 border-amber-300' : 'bg-[#F7F7F4] border-[#DDDBCF]'}`}>
+              <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${showImpactMetrics ? 'pb-3 border-b border-amber-200/70' : ''}`}>
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-amber-700" />
-                  <label className="font-black text-amber-950 text-xs sm:text-sm">
+                  <Clock className={`h-4 w-4 ${showImpactMetrics ? 'text-amber-700' : 'text-[#615F59]'}`} />
+                  <label className={`font-black text-xs sm:text-sm ${showImpactMetrics ? 'text-amber-950' : 'text-[#2D2C28]'}`}>
                     شاخص‌های اثرگذاری فرآیند
                   </label>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    showImpactMetrics ? 'bg-amber-200 text-amber-900' : 'bg-[#E5E5DF] text-[#615F59]'
+                  }`}>
+                    {showImpactMetrics ? 'فعال در اسلاید' : 'پیش‌فرض غیرفعال'}
+                  </span>
                 </div>
 
                 {/* Toggle Switch for Impact Metrics Box Visibility */}
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[11px] font-bold text-amber-900">
-                    {showImpactMetrics ? 'نمایش باکس شاخص‌ها در اسلاید فعال است' : 'باکس شاخص‌ها در اسلاید مخفی است'}
+                  <span className={`text-[11px] font-bold ${showImpactMetrics ? 'text-amber-900' : 'text-[#75746E]'}`}>
+                    {showImpactMetrics ? 'نمایش باکس شاخص‌ها در اسلاید فعال است' : 'غیرفعال (مخفی در اسلاید)'}
                   </span>
                   <button
                     type="button"
@@ -945,6 +1323,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       showImpactMetrics ? 'bg-amber-600' : 'bg-slate-300'
                     }`}
+                    title={showImpactMetrics ? 'غیرفعال‌سازی شاخص‌ها' : 'فعال‌سازی شاخص‌ها'}
                   >
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
@@ -955,79 +1334,93 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
-                {/* Metric 1: Time Reduction */}
-                <div className="space-y-1.5 bg-white p-3 rounded-xl border border-amber-200/80">
-                  <label className="flex items-center justify-between text-xs font-bold text-emerald-800">
-                    <span className="flex items-center gap-1.5">
-                      <Clock className="h-3.5 w-3.5 text-emerald-600" />
-                      <span>صرفه‌جویی زمان:</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-normal">کارت اول اسلاید</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={impactTimeMetric}
-                    onChange={e => setImpactTimeMetric(e.target.value)}
-                    placeholder="مثال: کاهش بیش از ۸۰٪ زمان پردازش حواله‌ها"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-[#2D2C28] placeholder:text-[#9A9890] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition font-medium"
-                  />
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 pt-0.5">
-                    <span>پیشنهاد:</span>
-                    <button
-                      type="button"
-                      onClick={() => setImpactTimeMetric('کاهش بیش از ۸۰٪ زمان پردازش حواله‌ها')}
-                      className="text-emerald-700 hover:underline cursor-pointer font-bold"
-                    >
-                      کاهش بیش از ۸۰٪
-                    </button>
-                    <span>|</span>
-                    <button
-                      type="button"
-                      onClick={() => setImpactTimeMetric('از ۳ روز کاری به ۳ ساعت')}
-                      className="text-emerald-700 hover:underline cursor-pointer font-bold"
-                    >
-                      از ۳ روز به ۳ ساعت
-                    </button>
+              {showImpactMetrics ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3">
+                  {/* Metric 1: Time Reduction */}
+                  <div className="space-y-1.5 bg-white p-3 rounded-xl border border-amber-200/80">
+                    <label className="flex items-center justify-between text-xs font-bold text-emerald-800">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>صرفه‌جویی زمان:</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-normal">کارت اول اسلاید</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={impactTimeMetric}
+                      onChange={e => setImpactTimeMetric(e.target.value)}
+                      placeholder="مثال: کاهش بیش از ۸۰٪ زمان پردازش حواله‌ها"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-[#2D2C28] placeholder:text-[#9A9890] focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition font-medium"
+                    />
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 pt-0.5">
+                      <span>پیشنهاد:</span>
+                      <button
+                        type="button"
+                        onClick={() => setImpactTimeMetric('کاهش بیش از ۸۰٪ زمان پردازش حواله‌ها')}
+                        className="text-emerald-700 hover:underline cursor-pointer font-bold"
+                      >
+                        کاهش بیش از ۸۰٪
+                      </button>
+                      <span>|</span>
+                      <button
+                        type="button"
+                        onClick={() => setImpactTimeMetric('از ۳ روز کاری به ۳ ساعت')}
+                        className="text-emerald-700 hover:underline cursor-pointer font-bold"
+                      >
+                        از ۳ روز به ۳ ساعت
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                {/* Metric 2: Error Reduction */}
-                <div className="space-y-1.5 bg-white p-3 rounded-xl border border-amber-200/80">
-                  <label className="flex items-center justify-between text-xs font-bold text-blue-800">
-                    <span className="flex items-center gap-1.5">
-                      <Gauge className="h-3.5 w-3.5 text-blue-600" />
-                      <span>کاهش خطای انسانی:</span>
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-normal">کارت دوم اسلاید</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={impactErrorMetric}
-                    onChange={e => setImpactErrorMetric(e.target.value)}
-                    placeholder="مثال: صفر شدن خطاهای مغایرت حساب بانکی و تراستی"
-                    className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-[#2D2C28] placeholder:text-[#9A9890] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-medium"
-                  />
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500 pt-0.5">
-                    <span>پیشنهاد:</span>
-                    <button
-                      type="button"
-                      onClick={() => setImpactErrorMetric('صفر شدن خطاهای مغایرت حساب بانکی و تراستی')}
-                      className="text-blue-700 hover:underline cursor-pointer font-bold"
-                    >
-                      صفر شدن خطای مغایرت
-                    </button>
-                    <span>|</span>
-                    <button
-                      type="button"
-                      onClick={() => setImpactErrorMetric('حذف ۱۰۰٪ خطاهای محاسباتی نرخ تسعیر')}
-                      className="text-blue-700 hover:underline cursor-pointer font-bold"
-                    >
-                      حذف ۱۰۰٪ خطای تسعیر
-                    </button>
+                  {/* Metric 2: Error Reduction */}
+                  <div className="space-y-1.5 bg-white p-3 rounded-xl border border-amber-200/80">
+                    <label className="flex items-center justify-between text-xs font-bold text-blue-800">
+                      <span className="flex items-center gap-1.5">
+                        <Gauge className="h-3.5 w-3.5 text-blue-600" />
+                        <span>کاهش خطای انسانی:</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-normal">کارت دوم اسلاید</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={impactErrorMetric}
+                      onChange={e => setImpactErrorMetric(e.target.value)}
+                      placeholder="مثال: صفر شدن خطاهای مغایرت حساب بانکی و تراستی"
+                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2 text-[#2D2C28] placeholder:text-[#9A9890] focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition font-medium"
+                    />
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 pt-0.5">
+                      <span>پیشنهاد:</span>
+                      <button
+                        type="button"
+                        onClick={() => setImpactErrorMetric('صفر شدن خطاهای مغایرت حساب بانکی و تراستی')}
+                        className="text-blue-700 hover:underline cursor-pointer font-bold"
+                      >
+                        صفر شدن خطای مغایرت
+                      </button>
+                      <span>|</span>
+                      <button
+                        type="button"
+                        onClick={() => setImpactErrorMetric('حذف ۱۰۰٪ خطاهای محاسباتی نرخ تسعیر')}
+                        className="text-blue-700 hover:underline cursor-pointer font-bold"
+                      >
+                        حذف ۱۰۰٪ خطای تسعیر
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="pt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[#75746E]">
+                  <span>این بخش به صورت پیش‌فرض غیرفعال است و کارت‌های شاخص در اسلاید مخفی می‌باشند.</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowImpactMetrics(true)}
+                    className="text-amber-800 hover:text-amber-950 font-bold text-xs hover:underline cursor-pointer flex items-center gap-1 self-start sm:self-auto"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    فعال‌سازی و تنظیم شاخص‌ها
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
