@@ -11,16 +11,20 @@ import {
   Settings,
   FilterX,
   Sparkles,
-  Presentation
+  Presentation,
+  LifeBuoy
 } from 'lucide-react';
 import { formatNumber } from '../utils/parser';
+import { TabVisibilitySettings, DEFAULT_TAB_VISIBILITY } from '../types';
 
 interface NavbarProps {
-  activeTab: 'removeEdit' | 'era' | 'slideshow';
-  onTabChange: (tab: 'removeEdit' | 'era' | 'slideshow') => void;
+  activeTab: 'removeEdit' | 'era' | 'slideshow' | 'tickets';
+  onTabChange: (tab: 'removeEdit' | 'era' | 'slideshow' | 'tickets') => void;
   lettersCount: number;
   uniqueLettersCount: number;
   eraCount: number;
+  ticketsCount?: number;
+  tabVisibility?: TabVisibilitySettings;
   slideSelectedCount?: number;
   rulesCount?: number;
   exclusionRulesCount?: number;
@@ -40,6 +44,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   lettersCount,
   uniqueLettersCount,
   eraCount,
+  ticketsCount = 0,
+  tabVisibility = DEFAULT_TAB_VISIBILITY,
   slideSelectedCount = 0,
   rulesCount = 0,
   exclusionRulesCount = 0,
@@ -78,58 +84,84 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center justify-center w-full lg:w-auto">
             <div className="flex items-center bg-[#EAEAE4] p-1 rounded-2xl border border-[#DDDBCF] shadow-xs gap-1 max-w-full overflow-x-auto">
               {/* Tab 1: Remove & Edit Letters */}
-              <button
-                onClick={() => onTabChange('removeEdit')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
-                  activeTab === 'removeEdit'
-                    ? 'bg-white text-[#2D2C28] shadow-xs'
-                    : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
-                }`}
-              >
-                <FileSpreadsheet className="h-4 w-4 shrink-0 text-[#545D4B]" />
-                <span>حذف و ویرایش</span>
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  activeTab === 'removeEdit' ? 'bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]' : 'bg-[#DDDBCF] text-[#5A5852]'
-                }`}>
-                  {formatNumber(uniqueLettersCount)}
-                </span>
-              </button>
+              {tabVisibility.removeEdit !== false && (
+                <button
+                  onClick={() => onTabChange('removeEdit')}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'removeEdit'
+                      ? 'bg-white text-[#2D2C28] shadow-xs'
+                      : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
+                  }`}
+                >
+                  <FileSpreadsheet className="h-4 w-4 shrink-0 text-[#545D4B]" />
+                  <span>حذف و ویرایش</span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    activeTab === 'removeEdit' ? 'bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]' : 'bg-[#DDDBCF] text-[#5A5852]'
+                  }`}>
+                    {formatNumber(uniqueLettersCount)}
+                  </span>
+                </button>
+              )}
 
               {/* Tab 2: Processes */}
-              <button
-                onClick={() => onTabChange('era')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
-                  activeTab === 'era'
-                    ? 'bg-white text-[#2D2C28] shadow-xs'
-                    : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
-                }`}
-              >
-                <Workflow className="h-4 w-4 shrink-0 text-[#545D4B]" />
-                <span>فرآیند ها</span>
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  activeTab === 'era' ? 'bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]' : 'bg-[#DDDBCF] text-[#5A5852]'
-                }`}>
-                  {formatNumber(eraCount)}
-                </span>
-              </button>
+              {tabVisibility.era !== false && (
+                <button
+                  onClick={() => onTabChange('era')}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'era'
+                      ? 'bg-white text-[#2D2C28] shadow-xs'
+                      : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
+                  }`}
+                >
+                  <Workflow className="h-4 w-4 shrink-0 text-[#545D4B]" />
+                  <span>فرآیند ها</span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    activeTab === 'era' ? 'bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]' : 'bg-[#DDDBCF] text-[#5A5852]'
+                  }`}>
+                    {formatNumber(eraCount)}
+                  </span>
+                </button>
+              )}
 
-              {/* Tab 3: Slide Presentation (نمایش اسلایدی) */}
-              <button
-                onClick={() => onTabChange('slideshow')}
-                className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
-                  activeTab === 'slideshow'
-                    ? 'bg-gradient-to-r from-blue-700 to-indigo-600 text-white shadow-xs'
-                    : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
-                }`}
-              >
-                <Presentation className={`h-4 w-4 shrink-0 ${activeTab === 'slideshow' ? 'text-white' : 'text-blue-600'}`} />
-                <span>نمایش اسلایدی</span>
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
-                  activeTab === 'slideshow' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
-                }`}>
-                  {formatNumber(slideSelectedCount)}
-                </span>
-              </button>
+              {/* Tab 3: IT Tickets (تیکت‌های دانا) */}
+              {tabVisibility.tickets === true && (
+                <button
+                  onClick={() => onTabChange('tickets')}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'tickets'
+                      ? 'bg-white text-[#2D2C28] shadow-xs'
+                      : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
+                  }`}
+                >
+                  <LifeBuoy className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>تیکت‌های IT</span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    activeTab === 'tickets' ? 'bg-[#EFEFEA] text-[#4B5344] border border-[#DDDBCF]' : 'bg-[#DDDBCF] text-[#5A5852]'
+                  }`}>
+                    {formatNumber(ticketsCount || 0)}
+                  </span>
+                </button>
+              )}
+
+              {/* Tab 4: Slide Presentation (نمایش اسلایدی) */}
+              {tabVisibility.slideshow !== false && (
+                <button
+                  onClick={() => onTabChange('slideshow')}
+                  className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all duration-150 cursor-pointer whitespace-nowrap ${
+                    activeTab === 'slideshow'
+                      ? 'bg-gradient-to-r from-blue-700 to-indigo-600 text-white shadow-xs'
+                      : 'text-[#75746E] hover:text-[#2D2C28] hover:bg-[#F3F3ED]'
+                  }`}
+                >
+                  <Presentation className={`h-4 w-4 shrink-0 ${activeTab === 'slideshow' ? 'text-white' : 'text-blue-600'}`} />
+                  <span>نمایش اسلایدی</span>
+                  <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                    activeTab === 'slideshow' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {formatNumber(slideSelectedCount)}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 

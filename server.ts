@@ -2564,6 +2564,288 @@ ${JSON.stringify(promptPayload, null, 2)}
     }
   });
 
+  // ----------------------------------------------------
+  // Dana Ticketing System Proxy & Sync Endpoints
+  // ----------------------------------------------------
+  app.post('/api/tickets/proxy-fetch', async (req: Request, res: Response) => {
+    try {
+      const {
+        apiUrl = 'http://it.novinchoob.local/api/Entity/GetEntityRemoteDataDynamic',
+        cookie,
+        bodyPayload
+      } = req.body;
+
+      if (!cookie || !cookie.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'کوکی احراز هویت الزامی است (Cookie is required)'
+        });
+      }
+
+      const headers: Record<string, string> = {
+        'accept': 'application/json, text/javascript, */*; q=0.01',
+        'accept-language': 'en-US,en;q=0.9',
+        'content-type': 'application/json; charset=UTF-8',
+        'x-requested-with': 'XMLHttpRequest',
+        'cookie': cookie.trim()
+      };
+
+      // Default Dana body if not provided
+      const defaultBody = {
+        EntityId: 'f904f186-46e2-4ac2-8d2f-5527368ccc8c',
+        FetchData: true,
+        CustomColumns: 'IsRemoved,ModifyBy,CreateBy,Status,ApplicantId,ViewStatus,ViewStatus,RecordColor',
+        searchItemColumns: '',
+        searchRelatedItemColumns: '',
+        Cellsrenderers: 'Actions,check,Title,NextSlaBreache,SatifacationRate,ViewStatus',
+        SectionFilter: null,
+        SourceType: 1,
+        filterdetail: [],
+        FilterPattern: '',
+        AttributeList: [
+          { AttributeId: 'd59b7b91-b3d4-4610-8f7a-1a843d2d6153', AttributeSystemName: 'StatusName', DisplayOrder: 6, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+          { AttributeId: '98fec161-b195-479d-911d-25a4ab4140cc', AttributeSystemName: 'Dana_Users__2__ApplicantIdName', DisplayOrder: 2, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 200, RelatedAttributeId: null },
+          { AttributeId: '1ce3ee9f-f43a-4f98-9c95-210bb1f7f988', AttributeSystemName: 'Dana_Users__1__ITStaffIdName', DisplayOrder: 5, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 200, RelatedAttributeId: null },
+          { AttributeId: 'd0248799-0f91-4248-9630-bb65f04ca218', AttributeSystemName: 'SatifacationRateName', DisplayOrder: 8, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+          { AttributeId: 'b9c5f8f7-548a-4ccd-90ae-f09538540cc4', AttributeSystemName: 'NextSlaBreache', DisplayOrder: 7, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 150, RelatedAttributeId: null },
+          { AttributeId: 'f45c1cfc-571d-42b4-84c1-e60084525529', AttributeSystemName: 'PriorityName', DisplayOrder: 4, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+          { AttributeId: '97798abd-80b0-4907-9709-aa4c4c1574ae', AttributeSystemName: 'TicketNumber', DisplayOrder: 0, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+          { AttributeId: '8918d1b0-d23e-4c53-bf39-2c0e62d4d4c0', AttributeSystemName: 'CreateDate', DisplayOrder: 3, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 150, RelatedAttributeId: null },
+          { AttributeId: 'fe362ec8-8bb4-4030-92e2-576286112bbb', AttributeSystemName: 'Title', DisplayOrder: 1, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 300, RelatedAttributeId: null }
+        ],
+        SortDataField: 'TicketNumber',
+        SortOrder: 'desc',
+        PageNum: 0,
+        PageSize: 50
+      };
+
+      const finalBody = typeof bodyPayload === 'string'
+        ? bodyPayload
+        : JSON.stringify(bodyPayload || defaultBody);
+
+      // Perform backend fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+      const upstreamRes = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: finalBody,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!upstreamRes.ok) {
+        const errorText = await upstreamRes.text().catch(() => '');
+        return res.status(upstreamRes.status).json({
+          success: false,
+          error: `سامانه تیکتینگ پاسخ ناموفق داد (HTTP ${upstreamRes.status})`,
+          details: errorText
+        });
+      }
+
+      const data = await upstreamRes.json();
+      res.json({
+        success: true,
+        data
+      });
+    } catch (err: any) {
+      console.error('Error fetching tickets from upstream:', err);
+      res.status(502).json({
+        success: false,
+        error: err.name === 'AbortError'
+          ? 'زمان ارتباط با سامانه تیکتینگ به پایان رسید (Timeout)'
+          : `خطا در برقراری ارتباط با سامانه تیکتینگ: ${err.message}`
+      });
+    }
+  });
+
+  // Get tickets directly from DanaTicket table with fallback
+  app.get('/api/tickets', async (req: Request, res: Response) => {
+    try {
+      const config = await prisma.appSetting.findUnique({
+        where: { key: 'dana_tickets_config' }
+      });
+      const lastSyncSetting = await prisma.appSetting.findUnique({
+        where: { key: 'dana_tickets_last_sync' }
+      });
+
+      // Query dedicated DanaTicket table ordered by ticketNumber desc
+      const dbTickets = await prisma.danaTicket.findMany({
+        orderBy: { ticketNumber: 'desc' },
+        take: 1000 // fast indexed retrieval
+      });
+
+      let totalRows = await prisma.danaTicket.count();
+      let tickets: any[] = [];
+
+      if (dbTickets.length > 0) {
+        tickets = dbTickets.map(t => {
+          if (t.rawJson) {
+            try {
+              return JSON.parse(t.rawJson);
+            } catch {}
+          }
+          return {
+            TicketId: t.ticketId,
+            TicketNumber: t.ticketNumber,
+            Title: t.title,
+            StatusName: t.status,
+            Status: t.statusId,
+            Dana_Users__2__ApplicantIdName: t.applicantName,
+            ApplicantId: t.applicantId,
+            Dana_Users__1__ITStaffIdName: t.itStaffName,
+            ITStaffId: t.itStaffId,
+            CreateDate: t.createDateIso,
+            SatifacationRateName: t.satisfactionRateName,
+            SatifacationRate: t.satisfactionRate,
+            PriorityName: t.priorityName,
+            IsRemoved: t.isRemoved
+          };
+        });
+      } else {
+        // Fallback to AppSetting if old data exists
+        const setting = await prisma.appSetting.findUnique({
+          where: { key: 'dana_tickets_data' }
+        });
+        if (setting && setting.value) {
+          try {
+            const parsed = JSON.parse(setting.value);
+            tickets = parsed.Rows || parsed.rows || (Array.isArray(parsed) ? parsed : []);
+            totalRows = parsed.TotalRows ?? tickets.length;
+          } catch {}
+        }
+      }
+
+      let parsedConfig = null;
+      if (config && config.value) {
+        try {
+          parsedConfig = JSON.parse(config.value);
+        } catch {}
+      }
+
+      res.json({
+        success: true,
+        tickets,
+        totalRows,
+        lastSyncTime: lastSyncSetting?.value || null,
+        config: parsedConfig
+      });
+    } catch (err: any) {
+      console.error('Error getting tickets from DB:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Save tickets to dedicated DanaTicket SQLite table (with bulk upsert/transaction)
+  app.post('/api/tickets', async (req: Request, res: Response) => {
+    try {
+      const { tickets, totalRows, config } = req.body;
+      const now = new Date().toISOString();
+      const rows = Array.isArray(tickets) ? tickets : [];
+
+      if (rows.length > 0) {
+        // Upsert each ticket into dedicated DanaTicket table
+        for (const row of rows) {
+          const ticketNumber = typeof row.TicketNumber === 'number'
+            ? row.TicketNumber
+            : (parseInt(row.TicketNumber, 10) || 0);
+
+          if (!ticketNumber) continue;
+
+          const ticketId = row.TicketId || null;
+          const title = (row.Title || '').trim() || 'بدون عنوان';
+          const status = (row.StatusName || '').trim() || 'نامشخص';
+          const statusId = row.Status || null;
+          const applicantName = (row.Dana_Users__2__ApplicantIdName || row.ApplicantName || '').trim() || 'ناشناس';
+          const applicantId = row.ApplicantId || null;
+          const itStaffName = (row.Dana_Users__1__ITStaffIdName || row.ITStaffName || '').trim() || 'تخصیص‌نیافته';
+          const itStaffId = row.ITStaffId || null;
+          const createDateIso = row.CreateDate || null;
+          const satisfactionRateName = row.SatifacationRateName || null;
+          const satisfactionRate = typeof row.SatifacationRate === 'number' ? row.SatifacationRate : null;
+          const priorityName = row.PriorityName || null;
+          const priorityId = row.Priority || null;
+          const isRemoved = Boolean(row.IsRemoved);
+          const rawJson = JSON.stringify(row);
+
+          await prisma.danaTicket.upsert({
+            where: { ticketNumber },
+            create: {
+              ticketNumber,
+              ticketId,
+              title,
+              status,
+              statusId,
+              applicantName,
+              applicantId,
+              itStaffName,
+              itStaffId,
+              createDateIso,
+              satisfactionRateName,
+              satisfactionRate,
+              priorityName,
+              priorityId,
+              isRemoved,
+              rawJson
+            },
+            update: {
+              ticketId,
+              title,
+              status,
+              statusId,
+              applicantName,
+              applicantId,
+              itStaffName,
+              itStaffId,
+              createDateIso,
+              satisfactionRateName,
+              satisfactionRate,
+              priorityName,
+              priorityId,
+              isRemoved,
+              rawJson
+            }
+          });
+        }
+      }
+
+      // Record last sync time
+      await prisma.appSetting.upsert({
+        where: { key: 'dana_tickets_last_sync' },
+        create: { key: 'dana_tickets_last_sync', value: now },
+        update: { value: now }
+      });
+
+      // Save config if passed
+      if (config) {
+        await prisma.appSetting.upsert({
+          where: { key: 'dana_tickets_config' },
+          create: {
+            key: 'dana_tickets_config',
+            value: JSON.stringify(config)
+          },
+          update: {
+            value: JSON.stringify(config)
+          }
+        });
+      }
+
+      const totalCount = await prisma.danaTicket.count();
+
+      res.json({
+        success: true,
+        count: rows.length,
+        totalRows: totalCount,
+        lastSyncTime: now
+      });
+    } catch (err: any) {
+      console.error('Error saving tickets to DanaTicket table:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
 
   // ----------------------------------------------------
   // Vite Middleware Setup for Frontend SPA

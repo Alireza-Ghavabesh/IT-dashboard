@@ -720,6 +720,67 @@ export const api = {
       throw new Error(err.error || 'خطا در تحلیل نمودار توسط هوش مصنوعی');
     }
     return res.json();
+  },
+
+  // ----------------------------------------------------
+  // Dana Ticketing System Integration
+  // ----------------------------------------------------
+  async getTickets(): Promise<{
+    success: boolean;
+    tickets: any[];
+    totalRows: number;
+    lastSyncTime?: string;
+    config?: any;
+  }> {
+    const res = await fetch('/api/tickets');
+    if (!res.ok) throw new Error('خطا در دریافت تیکت‌ها از پایگاه داده');
+    return res.json();
+  },
+
+  async saveTickets(payload: {
+    tickets: any[];
+    totalRows?: number;
+    config?: any;
+  }): Promise<{
+    success: boolean;
+    count: number;
+    totalRows: number;
+    lastSyncTime: string;
+  }> {
+    const res = await fetch('/api/tickets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'خطا در ذخیره تیکت‌ها');
+    }
+    return res.json();
+  },
+
+  async proxyFetchTickets(payload: {
+    apiUrl?: string;
+    cookie: string;
+    bodyPayload?: any;
+  }): Promise<{
+    success: boolean;
+    data: {
+      Rows?: any[];
+      TotalRows?: number;
+      [key: string]: any;
+    };
+  }> {
+    const res = await fetch('/api/tickets/proxy-fetch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `خطا در دریافت تیکت‌ها (HTTP ${res.status})`);
+    }
+    return res.json();
   }
 };
 

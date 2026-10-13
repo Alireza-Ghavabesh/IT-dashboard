@@ -49,9 +49,19 @@ import {
   Presentation,
   Workflow,
   Paperclip,
-  FileText
+  FileText,
+  LifeBuoy
 } from 'lucide-react';
-import { CauseRule, ExclusionRule, ProcessedLetter, EraVisibilitySettings, EraColumnVisibility, DEFAULT_ERA_COLUMN_VISIBILITY } from '../types';
+import {
+  CauseRule,
+  ExclusionRule,
+  ProcessedLetter,
+  EraVisibilitySettings,
+  EraColumnVisibility,
+  DEFAULT_ERA_COLUMN_VISIBILITY,
+  TabVisibilitySettings,
+  DEFAULT_TAB_VISIBILITY
+} from '../types';
 import { classifyLetterCause, isLetterExcluded, formatNumber } from '../utils/parser';
 import { SearchableSelect } from './SearchableSelect';
 import { api } from '../services/api';
@@ -96,6 +106,10 @@ interface SettingsModalProps {
   onToggleEraColumnVisibility?: (colKey: keyof EraColumnVisibility, val: boolean) => void;
   onSetAllEraColumnsVisibility?: (val: boolean) => void;
   onResetEraColumnsVisibility?: () => void;
+  // Tab Visibility Settings (کنترل نمایش یا عدم نمایش هر یک از ۴ تب اصلی برنامه)
+  tabVisibility?: TabVisibilitySettings;
+  onToggleTabVisibility?: (tabKey: keyof TabVisibilitySettings, val: boolean) => void;
+  onResetTabVisibility?: () => void;
   onOpenAiModal?: () => void;
   onDataRestored?: () => Promise<void>;
 }
@@ -153,6 +167,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleEraColumnVisibility,
   onSetAllEraColumnsVisibility,
   onResetEraColumnsVisibility,
+  tabVisibility = DEFAULT_TAB_VISIBILITY,
+  onToggleTabVisibility,
+  onResetTabVisibility,
   onOpenAiModal,
   onDataRestored
 }) => {
@@ -2285,6 +2302,194 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* ======================================================== */}
           {activeTab === 'system' && (
             <div className="space-y-6">
+              {/* Card -1: Navigation Tabs Visibility Control (مدیریت نمایش تب‌های نوار اصلی) */}
+              <div className="bg-gradient-to-br from-white via-[#FAF9F5] to-[#F5F4EE] rounded-2xl p-5 border border-[#DDDBCF] shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E8E6DF] pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#545D4B] to-[#3E4537] text-white shadow-xs shrink-0 mt-0.5">
+                      <Layers className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black text-[#2D2C28]">
+                          مدیریت نمایش تب‌های نوار بالایی سامانه (Header Tabs)
+                        </h3>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#EFEFEA] text-[#545D4B] border border-[#DDDBCF]">
+                          شخصی‌سازی رابط کاربری
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#75746E] mt-1 leading-relaxed font-medium">
+                        فعال یا غیرفعال‌سازی نمایش هر یک از بخش‌های اصلی در منوی بالای برنامه (تب‌های حذف و ویرایش، فرآیندها، تیکت‌های IT و اسلایدشو)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Reset Tabs to Default */}
+                  <button
+                    type="button"
+                    onClick={() => onResetTabVisibility && onResetTabVisibility()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-[#F5F4EE] text-[#545D4B] hover:text-[#2D2C28] text-xs font-bold border border-[#DDDBCF] transition shadow-2xs cursor-pointer shrink-0"
+                    title="بازنشانی تب‌ها به حالت پیش‌فرض (تیکت‌ها غیرفعال، ۳ تای دیگر فعال)"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>بازنشانی تب‌ها به پیش‌فرض</span>
+                  </button>
+                </div>
+
+                {/* 4 Tabs Toggle Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  {/* Tab 1: Remove & Edit Letters */}
+                  <div className="p-4 rounded-xl bg-white border border-[#E2E0D8] space-y-2.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[#2D2C28] flex items-center gap-1.5">
+                          <FileSpreadsheet className="h-4 w-4 text-[#545D4B]" />
+                          <span>۱. حذف و ویرایش</span>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={tabVisibility.removeEdit}
+                          onClick={() => onToggleTabVisibility && onToggleTabVisibility('removeEdit', !tabVisibility.removeEdit)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            tabVisibility.removeEdit ? 'bg-[#545D4B]' : 'bg-[#CBD5E1]'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              tabVisibility.removeEdit ? '-translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#75746E] mt-1.5 leading-relaxed">
+                        داشبورد ماتریس مکاتبات، آمار کارکرد و قوانین استثنا و علت
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-bold">
+                      {tabVisibility.removeEdit ? (
+                        <span className="text-emerald-700">✓ فعال در نوار بالا</span>
+                      ) : (
+                        <span className="text-[#8A8880]">✕ مخفی شده</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tab 2: ERA Processes */}
+                  <div className="p-4 rounded-xl bg-white border border-[#E2E0D8] space-y-2.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[#2D2C28] flex items-center gap-1.5">
+                          <Workflow className="h-4 w-4 text-[#545D4B]" />
+                          <span>۲. فرآیند ها (ERA)</span>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={tabVisibility.era}
+                          onClick={() => onToggleTabVisibility && onToggleTabVisibility('era', !tabVisibility.era)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            tabVisibility.era ? 'bg-[#545D4B]' : 'bg-[#CBD5E1]'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              tabVisibility.era ? '-translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#75746E] mt-1.5 leading-relaxed">
+                        مدیریت فرآیندها، تحلیل چالش و راهکار، و طراح دیاگرام BPMN
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-bold">
+                      {tabVisibility.era ? (
+                        <span className="text-emerald-700">✓ فعال در نوار بالا</span>
+                      ) : (
+                        <span className="text-[#8A8880]">✕ مخفی شده</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tab 3: IT Tickets (دانا) */}
+                  <div className={`p-4 rounded-xl border space-y-2.5 flex flex-col justify-between shadow-2xs ${
+                    tabVisibility.tickets ? 'bg-amber-50/40 border-amber-300' : 'bg-white border-[#E2E0D8]'
+                  }`}>
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[#2D2C28] flex items-center gap-1.5">
+                          <LifeBuoy className="h-4 w-4 text-amber-700" />
+                          <span>۳. تیکت‌های IT</span>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={tabVisibility.tickets}
+                          onClick={() => onToggleTabVisibility && onToggleTabVisibility('tickets', !tabVisibility.tickets)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            tabVisibility.tickets ? 'bg-amber-600' : 'bg-[#CBD5E1]'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              tabVisibility.tickets ? '-translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#75746E] mt-1.5 leading-relaxed">
+                        همگام‌سازی و تحلیل تیکت‌های پشتیبانی دانا پرداز (پیش‌فرض: غیرفعال)
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-bold">
+                      {tabVisibility.tickets ? (
+                        <span className="text-amber-800">✓ فعال در نوار بالا</span>
+                      ) : (
+                        <span className="text-[#8A8880]">✕ غیرفعال (پیش‌فرض)</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Tab 4: Slideshow Presentation */}
+                  <div className="p-4 rounded-xl bg-white border border-[#E2E0D8] space-y-2.5 flex flex-col justify-between shadow-2xs">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-[#2D2C28] flex items-center gap-1.5">
+                          <Presentation className="h-4 w-4 text-blue-600" />
+                          <span>۴. نمایش اسلایدی</span>
+                        </span>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={tabVisibility.slideshow}
+                          onClick={() => onToggleTabVisibility && onToggleTabVisibility('slideshow', !tabVisibility.slideshow)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                            tabVisibility.slideshow ? 'bg-blue-600' : 'bg-[#CBD5E1]'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                              tabVisibility.slideshow ? '-translate-x-4' : 'translate-x-0'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#75746E] mt-1.5 leading-relaxed">
+                        ارائه تمام‌صفحه پروژکتوری، کنترل اسلایدها و بازچینی
+                      </p>
+                    </div>
+                    <div className="text-[10px] font-bold">
+                      {tabVisibility.slideshow ? (
+                        <span className="text-blue-700">✓ فعال در نوار بالا</span>
+                      ) : (
+                        <span className="text-[#8A8880]">✕ مخفی شده</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Card 0: Gemini API Key Setup & Live Connection Testing */}
               <div className="bg-white rounded-2xl p-5 border border-[#BFDBFE] shadow-xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E8F0] pb-4">

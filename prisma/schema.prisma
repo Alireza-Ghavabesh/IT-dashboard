@@ -104,3 +104,32 @@ model AppSetting {
   updatedAt DateTime @updatedAt
 }
 
+model DanaTicket {
+  id                   String    @id @default(cuid())
+  ticketId             String?   @unique // Dana Ticket UUID e.g. "c8749c73-44ff-46f5-b982-f7303649ec1c"
+  ticketNumber         Int       @unique // e.g. 3041
+  title                String
+  status               String    @default("نامشخص") // e.g. "انجام شده", "بسته", ...
+  statusId             String?
+  applicantName        String?   @default("ناشناس")
+  applicantId          String?
+  itStaffName          String?   @default("تخصیص‌نیافته")
+  itStaffId            String?
+  createDateIso        String?   // e.g. "2026-10-12T12:17:00"
+  createDateFa         String?   // e.g. "1405/07/21 12:17"
+  satisfactionRateName String?
+  satisfactionRate     Int?
+  priorityName         String?
+  priorityId           String?
+  isRemoved            Boolean   @default(false)
+  rawJson              String?   // Full original Dana payload
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([ticketNumber])
+  @@index([status])
+  @@index([itStaffName])
+  @@index([applicantName])
+  @@index([createDateIso])
+}
+

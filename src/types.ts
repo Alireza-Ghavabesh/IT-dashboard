@@ -303,3 +303,69 @@ export interface EraVisibilitySettings {
   columnVisibility?: EraColumnVisibility; // کنترل پویای نمایش یا عدم نمایش تک‌تک ستون‌های جدول فرآیندها
 }
 
+export interface TabVisibilitySettings {
+  removeEdit: boolean; // تب حذف و ویرایش (پیش‌فرض: فعال)
+  era: boolean;        // تب فرآیندها (پیش‌فرض: فعال)
+  slideshow: boolean;  // تب نمایش اسلایدی (پیش‌فرض: فعال)
+  tickets: boolean;    // تب تیکت‌های IT (پیش‌فرض: غیرفعال)
+}
+
+export const DEFAULT_TAB_VISIBILITY: TabVisibilitySettings = {
+  removeEdit: true,
+  era: true,
+  slideshow: true,
+  tickets: false,
+};
+
+// Dana Ticketing System Types
+export interface DanaRawTicket {
+  TicketId: string;
+  TicketNumber: number;
+  Title: string;
+  StatusName: string;
+  Status?: string;
+  ApplicantId?: string;
+  Dana_Users__2__ApplicantIdName?: string;
+  ITStaffId?: string;
+  Dana_Users__1__ITStaffIdName?: string;
+  CreateDate: string; // ISO format: e.g. "2026-10-12T12:17:00"
+  SatifacationRateName?: string | null;
+  SatifacationRate?: number | null;
+  PriorityName?: string | null;
+  Priority?: string | null;
+  NextSlaBreache?: string;
+  IsRemoved?: boolean;
+  IsRemovedName?: string;
+  ModifyBy?: string;
+  CreateBy?: string;
+  RecordColor?: string | null;
+  ViewStatus?: string;
+  [key: string]: any;
+}
+
+export interface ProcessedDanaTicket {
+  id: string;
+  ticketNumber: number;
+  title: string;
+  status: string;
+  applicantName: string;
+  applicantId?: string;
+  itStaffName: string;
+  itStaffId?: string;
+  createDateIso: string;
+  createDateFa: string; // تاریخ شمسی
+  satisfactionRateName?: string | null;
+  satisfactionRate?: number | null;
+  priorityName?: string | null;
+  isRemoved?: boolean;
+}
+
+export interface TicketSyncConfig {
+  apiUrl: string;
+  cookie: string;
+  pageSize: number;
+  entityId: string;
+  lastSyncTime?: string;
+  totalSynced?: number;
+}
+

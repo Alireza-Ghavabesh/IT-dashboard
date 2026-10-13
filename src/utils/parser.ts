@@ -1457,3 +1457,67 @@ export function exportToCSV(filename: string, rows: Record<string, any>[]): void
   link.click();
   document.body.removeChild(link);
 }
+
+/**
+ * Convert ISO date string (e.g. "2026-10-12T12:17:00") to Jalali date string (e.g. "1405/07/21 12:17")
+ */
+export function convertIsoToJalali(isoString?: string | null): string {
+  if (!isoString) return '-';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const parts = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(d);
+
+    const year = parts.find(p => p.type === 'year')?.value || '';
+    const month = parts.find(p => p.type === 'month')?.value || '';
+    const day = parts.find(p => p.type === 'day')?.value || '';
+    const hour = parts.find(p => p.type === 'hour')?.value || '00';
+    const minute = parts.find(p => p.type === 'minute')?.value || '00';
+
+    return `${year}/${month}/${day} ${hour}:${minute}`;
+  } catch {
+    return isoString;
+  }
+}
+
+/**
+ * Normalize and process raw Dana ticketing rows into standardized ProcessedDanaTicket list
+ */
+export function processDanaTickets(rawRows: any[]): import('../types').ProcessedDanaTicket[] {
+  if (!Array.isArray(rawRows)) return [];
+
+  return rawRows.map((row, idx) => {
+    const id = row.TicketId || `ticket-${row.TicketNumber || idx}`;
+    const ticketNumber = typeof row.TicketNumber === 'number' ? row.TicketNumber : (parseInt(row.TicketNumber, 10) || idx + 1);
+    const title = (row.Title || '').trim() || 'بدون عنوان';
+    const status = (row.StatusName || '').trim() || 'نامشخص';
+    const applicantName = (row.Dana_Users__2__ApplicantIdName || row.ApplicantName || '').trim() || 'ناشناس';
+    const itStaffName = (row.Dana_Users__1__ITStaffIdName || row.ITStaffName || '').trim() || 'تخصیص‌نیافته';
+    const createDateIso = row.CreateDate || '';
+    const createDateFa = convertIsoToJalali(createDateIso);
+
+    return {
+      id,
+      ticketNumber,
+      title,
+      status,
+      applicantName,
+      applicantId: row.ApplicantId,
+      itStaffName,
+      itStaffId: row.ITStaffId,
+      createDateIso,
+      createDateFa,
+      satisfactionRateName: row.SatifacationRateName || null,
+      satisfactionRate: typeof row.SatifacationRate === 'number' ? row.SatifacationRate : null,
+      priorityName: row.PriorityName || null,
+      isRemoved: Boolean(row.IsRemoved)
+    };
+  });
+}

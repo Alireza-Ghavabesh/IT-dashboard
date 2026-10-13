@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { RemoveEditDashboard } from './components/RemoveEditDashboard';
 import { EraDashboard } from './components/EraDashboard';
 import { SlideshowView } from './components/SlideshowView';
+import { TicketsDashboard } from './components/TicketsDashboard';
 import { EraFormModal } from './components/EraFormModal';
 import { FileUploadModal } from './components/FileUploadModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -12,6 +13,7 @@ import { INITIAL_LETTERS_DATA, INITIAL_ERA_DATA } from './data/initialData';
 import {
   processRawLetters,
   processRawEraItems,
+  processDanaTickets,
   computeMonthlyMatrix,
   formatNumber,
   extractOrgUnit,
@@ -22,17 +24,21 @@ import {
   RawLetterItem,
   RawEraItem,
   ProcessedEraItem,
+  ProcessedDanaTicket,
+  TicketSyncConfig,
   CauseRule,
   ExclusionRule,
   EraVisibilitySettings,
   EraColumnVisibility,
-  DEFAULT_ERA_COLUMN_VISIBILITY
+  DEFAULT_ERA_COLUMN_VISIBILITY,
+  TabVisibilitySettings,
+  DEFAULT_TAB_VISIBILITY
 } from './types';
 import { api, HealthStatus } from './services/api';
 import { CheckCircle2, AlertCircle, Database, RefreshCw, Server, ShieldAlert, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'removeEdit' | 'era' | 'slideshow'>('removeEdit');
+  const [activeTab, setActiveTab] = useState<'removeEdit' | 'era' | 'slideshow' | 'tickets'>('removeEdit');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState<boolean>(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
@@ -48,6 +54,10 @@ export default function App() {
 
   const [rawLetters, setRawLetters] = useState<RawLetterItem[]>(INITIAL_LETTERS_DATA);
   const [rawEraItems, setRawEraItems] = useState<RawEraItem[]>(INITIAL_ERA_DATA);
+  const [rawTickets, setRawTickets] = useState<any[]>([]);
+  const [ticketsTotalRows, setTicketsTotalRows] = useState<number>(0);
+  const [ticketsLastSyncTime, setTicketsLastSyncTime] = useState<string | null>(null);
+  const [ticketConfig, setTicketConfig] = useState<TicketSyncConfig | null>(null);
   const [rules, setRules] = useState<CauseRule[]>([]);
   const [exclusionRules, setExclusionRules] = useState<ExclusionRule[]>(DEFAULT_EXCLUSION_RULES);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -227,6 +237,55 @@ export default function App() {
     });
   };
 
+  // Tab Visibility Settings (کنترل نمایش یا عدم نمایش هر یک از ۴ تب اصلی: پیش‌فرض تیکت‌ها غیرفعال، ۳ تای دیگر فعال)
+  const [tabVisibility, setTabVisibility] = useState<TabVisibilitySettings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('tab_visibility_settings');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          return {
+            removeEdit: parsed.removeEdit ?? true,
+            era: parsed.era ?? true,
+            slideshow: parsed.slideshow ?? true,
+            tickets: parsed.tickets ?? false,
+          };
+        } catch {}
+      }
+    }
+    return { ...DEFAULT_TAB_VISIBILITY };
+  });
+
+  const handleToggleTabVisibility = (key: keyof TabVisibilitySettings, val: boolean) => {
+    setTabVisibility(prev => {
+      const next = { ...prev, [key]: val };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('tab_visibility_settings', JSON.stringify(next));
+      }
+      api.saveSetting('tab_visibility_settings', next).catch(() => {});
+
+      // If user disables the currently active tab, switch to first visible tab
+      if (!val && activeTab === key) {
+        if (key !== 'removeEdit' && next.removeEdit) setActiveTab('removeEdit');
+        else if (key !== 'era' && next.era) setActiveTab('era');
+        else if (key !== 'slideshow' && next.slideshow) setActiveTab('slideshow');
+        else if (key !== 'tickets' && next.tickets) setActiveTab('tickets');
+      }
+
+      return next;
+    });
+  };
+
+  const handleResetTabVisibility = () => {
+    const next = { ...DEFAULT_TAB_VISIBILITY };
+    setTabVisibility(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tab_visibility_settings', JSON.stringify(next));
+    }
+    api.saveSetting('tab_visibility_settings', next).catch(() => {});
+    showToast('تنظیمات تب‌ها به حالت پیش‌فرض بازنشانی شد (تیکت‌ها غیرفعال، سایر تب‌ها فعال).');
+  };
+
   const handleToggleFloatingAiButton = (val: boolean) => {
     setShowFloatingAiButton(val);
     if (typeof window !== 'undefined') {
@@ -275,14 +334,24 @@ export default function App() {
   const loadDatabaseData = useCallback(async (showSyncToast = false) => {
     try {
       setIsSyncing(true);
-      const [letters, era, fetchedRules, fetchedExclusions, settings, health] = await Promise.all([
+      const [letters, era, fetchedRules, fetchedExclusions, settings, health, ticketsData] = await Promise.all([
         api.getLetters(),
         api.getEraItems(),
         api.getRules().catch(() => []),
         api.getExclusions().catch(() => []),
         api.getSettings().catch(() => ({})),
-        api.getHealth().catch(() => null)
+        api.getHealth().catch(() => null),
+        api.getTickets().catch(() => ({ tickets: [], totalRows: 0, lastSyncTime: null, config: null }))
       ]);
+
+      if (ticketsData) {
+        setRawTickets(ticketsData.tickets || []);
+        setTicketsTotalRows(ticketsData.totalRows || (ticketsData.tickets?.length || 0));
+        setTicketsLastSyncTime(ticketsData.lastSyncTime || null);
+        if (ticketsData.config) {
+          setTicketConfig(ticketsData.config);
+        }
+      }
 
       if (letters && letters.length > 0) {
         setRawLetters(letters);
@@ -499,6 +568,142 @@ export default function App() {
       isSelectedForSlide: selectedSlideIds.has(item.id)
     }));
   }, [rawEraItems, selectedSlideIds]);
+
+  const processedDanaTickets = useMemo(() => {
+    return processDanaTickets(rawTickets);
+  }, [rawTickets]);
+
+  // Dana Ticket Sync Handler (Proxy or Browser-side)
+  const handleSyncTickets = useCallback(async (cfg: TicketSyncConfig): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      setTicketConfig(cfg);
+      let fetchedRows: any[] = [];
+      let total = 0;
+
+      // 1. Try server-side proxy first (if server is in local network)
+      try {
+        const proxyRes = await api.proxyFetchTickets({
+          apiUrl: cfg.apiUrl,
+          cookie: cfg.cookie
+        });
+        if (proxyRes.success && proxyRes.data?.Rows) {
+          fetchedRows = proxyRes.data.Rows;
+          total = proxyRes.data.TotalRows ?? fetchedRows.length;
+        }
+      } catch (proxyErr: any) {
+        console.warn('Backend proxy failed, attempting direct browser request:', proxyErr);
+        // 2. If proxy failed (e.g. running in cloud dev where cloud cannot resolve local domain),
+        // try direct browser fetch because the user's browser IS inside the local network
+        try {
+          const directRes = await fetch(cfg.apiUrl, {
+            method: 'POST',
+            headers: {
+              'accept': 'application/json, text/javascript, */*; q=0.01',
+              'content-type': 'application/json; charset=UTF-8',
+              'x-requested-with': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+              EntityId: cfg.entityId || 'f904f186-46e2-4ac2-8d2f-5527368ccc8c',
+              FetchData: true,
+              CustomColumns: 'IsRemoved,ModifyBy,CreateBy,Status,ApplicantId,ViewStatus,ViewStatus,RecordColor',
+              searchItemColumns: '',
+              searchRelatedItemColumns: '',
+              Cellsrenderers: 'Actions,check,Title,NextSlaBreache,SatifacationRate,ViewStatus',
+              SectionFilter: null,
+              SourceType: 1,
+              filterdetail: [],
+              FilterPattern: '',
+              AttributeList: [
+                { AttributeId: 'd59b7b91-b3d4-4610-8f7a-1a843d2d6153', AttributeSystemName: 'StatusName', DisplayOrder: 6, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+                { AttributeId: '98fec161-b195-479d-911d-25a4ab4140cc', AttributeSystemName: 'Dana_Users__2__ApplicantIdName', DisplayOrder: 2, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 200, RelatedAttributeId: null },
+                { AttributeId: '1ce3ee9f-f43a-4f98-9c95-210bb1f7f988', AttributeSystemName: 'Dana_Users__1__ITStaffIdName', DisplayOrder: 5, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 200, RelatedAttributeId: null },
+                { AttributeId: 'd0248799-0f91-4248-9630-bb65f04ca218', AttributeSystemName: 'SatifacationRateName', DisplayOrder: 8, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+                { AttributeId: 'b9c5f8f7-548a-4ccd-90ae-f09538540cc4', AttributeSystemName: 'NextSlaBreache', DisplayOrder: 7, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 150, RelatedAttributeId: null },
+                { AttributeId: 'f45c1cfc-571d-42b4-84c1-e60084525529', AttributeSystemName: 'PriorityName', DisplayOrder: 4, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+                { AttributeId: '97798abd-80b0-4907-9709-aa4c4c1574ae', AttributeSystemName: 'TicketNumber', DisplayOrder: 0, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 100, RelatedAttributeId: null },
+                { AttributeId: '8918d1b0-d23e-4c53-bf39-2c0e62d4d4c0', AttributeSystemName: 'CreateDate', DisplayOrder: 3, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 150, RelatedAttributeId: null },
+                { AttributeId: 'fe362ec8-8bb4-4030-92e2-576286112bbb', AttributeSystemName: 'Title', DisplayOrder: 1, ViewID: '0241c37f-9fa0-447e-bf52-792d69c630c6', Width: 300, RelatedAttributeId: null }
+              ],
+              SortDataField: 'TicketNumber',
+              SortOrder: 'desc',
+              PageNum: 0,
+              PageSize: cfg.pageSize || 50
+            })
+          });
+
+          if (directRes.ok) {
+            const data = await directRes.json();
+            if (data?.Rows) {
+              fetchedRows = data.Rows;
+              total = data.TotalRows ?? fetchedRows.length;
+            }
+          } else {
+            throw new Error(proxyErr.message || `خطا در اتصال به سامانه (HTTP ${directRes.status})`);
+          }
+        } catch {
+          throw proxyErr;
+        }
+      }
+
+      if (fetchedRows.length > 0) {
+        setRawTickets(fetchedRows);
+        setTicketsTotalRows(total);
+        const now = new Date().toISOString();
+        setTicketsLastSyncTime(now);
+
+        // Save to SQLite
+        await api.saveTickets({
+          tickets: fetchedRows,
+          totalRows: total,
+          config: cfg
+        });
+
+        showToast(`${formatNumber(fetchedRows.length)} تیکت جدید از سامانه دانا همگام‌سازی و ذخیره شد.`);
+        return { success: true, count: fetchedRows.length };
+      }
+
+      return { success: false, count: 0, error: 'هیچ ردیفی از سامانه دریافت نشد یا نشست منقضی شده است.' };
+    } catch (err: any) {
+      console.error('Ticket sync failed:', err);
+      return { success: false, count: 0, error: err.message || 'خطا در ارتباط با سامانه دانا' };
+    }
+  }, [showToast]);
+
+  const handleSaveTicketConfig = useCallback(async (cfg: TicketSyncConfig) => {
+    setTicketConfig(cfg);
+    await api.saveTickets({
+      tickets: rawTickets,
+      totalRows: ticketsTotalRows,
+      config: cfg
+    });
+    showToast('تنظیمات کوکی و اتصال سامانه دانا ذخیره شد.');
+  }, [rawTickets, ticketsTotalRows, showToast]);
+
+  const handleImportTicketJson = useCallback(async (jsonString: string): Promise<{ success: boolean; count: number; error?: string }> => {
+    try {
+      const parsed = JSON.parse(jsonString);
+      const rows = parsed.Rows || parsed.rows || (Array.isArray(parsed) ? parsed : []);
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return { success: false, count: 0, error: 'آرایه تیکت‌ها (Rows) در JSON یافت نشد.' };
+      }
+
+      setRawTickets(rows);
+      setTicketsTotalRows(parsed.TotalRows ?? rows.length);
+      const now = new Date().toISOString();
+      setTicketsLastSyncTime(now);
+
+      await api.saveTickets({
+        tickets: rows,
+        totalRows: parsed.TotalRows ?? rows.length,
+        config: ticketConfig
+      });
+
+      showToast(`${formatNumber(rows.length)} تیکت از JSON وارد و در پایگاه داده ذخیره شد.`);
+      return { success: true, count: rows.length };
+    } catch (err: any) {
+      return { success: false, count: 0, error: err.message || 'فرمت JSON نامعتبر است.' };
+    }
+  }, [ticketConfig, showToast]);
 
   // Compute monthly statistics and unit matrix
   const matrixStats = useMemo(() => {
@@ -1059,6 +1264,8 @@ export default function App() {
         lettersCount={processedLetters.length}
         uniqueLettersCount={matrixStats.grandTotalUniqueLetters}
         eraCount={processedEraItems.length}
+        ticketsCount={processedDanaTickets.length}
+        tabVisibility={tabVisibility}
         slideSelectedCount={processedEraItems.filter(i => i.isSelectedForSlide).length}
         rulesCount={rules.length}
         exclusionRulesCount={exclusionRules.length}
@@ -1096,7 +1303,7 @@ export default function App() {
             )}
           </div>
           <div className="flex items-center gap-2 font-mono text-[11px] text-[#75746E]">
-            <span>مجموع رکوردها: {formatNumber(processedLetters.length + processedEraItems.length)}</span>
+            <span>مجموع رکوردها: {formatNumber(processedLetters.length + processedEraItems.length + processedDanaTickets.length)}</span>
             {isSyncing && (
               <span className="flex items-center gap-1 text-[#446347] font-sans font-bold">
                 <RefreshCw className="h-3 w-3 animate-spin" />
@@ -1145,6 +1352,16 @@ export default function App() {
             onOpenSettingsModal={() => handleOpenSettings('system')}
             onOpenGeneralAiChat={() => setIsAiModalOpen(true)}
           />
+        ) : activeTab === 'tickets' ? (
+          <TicketsDashboard
+            tickets={processedDanaTickets}
+            totalRows={ticketsTotalRows}
+            lastSyncTime={ticketsLastSyncTime}
+            config={ticketConfig}
+            onSync={handleSyncTickets}
+            onSaveConfig={handleSaveTicketConfig}
+            onImportJson={handleImportTicketJson}
+          />
         ) : (
           <SlideshowView
             items={processedEraItems}
@@ -1170,6 +1387,7 @@ export default function App() {
           <div className="text-[#8A8880] flex items-center gap-3">
             <span>تعداد نامه‌ها: {formatNumber(processedLetters.length)}</span>
             <span>تعداد فرآیندهای ERA: {formatNumber(processedEraItems.length)}</span>
+            <span>تعداد تیکت‌های IT: {formatNumber(processedDanaTickets.length)}</span>
           </div>
         </div>
       </footer>
@@ -1246,6 +1464,9 @@ export default function App() {
         onToggleEraColumnVisibility={handleToggleEraColumnVisibility}
         onSetAllEraColumnsVisibility={handleSetAllEraColumnsVisibility}
         onResetEraColumnsVisibility={handleResetEraColumnsVisibility}
+        tabVisibility={tabVisibility}
+        onToggleTabVisibility={handleToggleTabVisibility}
+        onResetTabVisibility={handleResetTabVisibility}
         onOpenAiModal={() => {
           setIsSettingsModalOpen(false);
           setIsAiModalOpen(true);
