@@ -9,6 +9,7 @@ import { SlideshowView } from './SlideshowView';
 import { EraSlideHoverPreview } from './EraSlideHoverPreview';
 import { AiChartAnalysisModal } from './AiChartAnalysisModal';
 import { JalaliDateInput } from './JalaliDateInput';
+import { QuickReportModal } from './QuickReportModal';
 import { formatNumber, processRawEraItems, isDateInRange, parsePersianDate, getCurrentJalaliDate, getJalaliMonthsAgo, PERSIAN_MONTHS_LIST } from '../utils/parser';
 import { downloadPresentationHtml } from '../utils/htmlExport';
 import { api, EraServerFilterResponse } from '../services/api';
@@ -206,6 +207,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [activeBpmnItem, setActiveBpmnItem] = useState<ProcessedEraItem | null>(null);
   const [isBpmnModalOpen, setIsBpmnModalOpen] = useState<boolean>(false);
   const [bpmnFilter, setBpmnFilter] = useState<'all' | 'with-bpmn' | 'without-bpmn'>('all');
+  const [isQuickReportOpen, setIsQuickReportOpen] = useState<boolean>(false);
 
   // Process Rejection Reason Popup Modal State
   const [rejectionModalItem, setRejectionModalItem] = useState<ProcessedEraItem | null>(null);
@@ -2123,6 +2125,17 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
               </button>
             </div>
 
+            {/* دکمه گزارش متنی سریع */}
+            <button
+              type="button"
+              onClick={() => setIsQuickReportOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition active:scale-95 cursor-pointer"
+              title="تولید متن آماده و شماره‌گذاری‌شده برای گزارش کارهای انجام‌شده روزانه (چالش و راهکار)"
+            >
+              <FileText className="h-4 w-4" />
+              <span>گزارش متنی سریع</span>
+            </button>
+
             {/* دکمه ثبت فرآیند جدید - رو به روی نوشته جدول جامع اقدامات */}
             <button
               onClick={handleOpenAdd}
@@ -3328,6 +3341,13 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           uniqueUnits: allUnits.length
         }}
         onOpenGeneralAiChat={onOpenGeneralAiChat}
+      />
+
+      {/* Quick Text Report Modal (گزارش متنی روزانه بر اساس فرآیندهای تیک‌خورده) */}
+      <QuickReportModal
+        isOpen={isQuickReportOpen}
+        onClose={() => setIsQuickReportOpen(false)}
+        items={eraItems}
       />
     </div>
   );
