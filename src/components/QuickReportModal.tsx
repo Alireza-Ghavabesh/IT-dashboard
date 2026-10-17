@@ -24,7 +24,107 @@ import {
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import { getCurrentJalaliDate, formatNumber, isDateInRange, stripHtmlToPlainText } from '../utils/parser';
+import { getProcessPresentation } from '../data/presentationTemplates';
 import { JalaliDateInput } from './JalaliDateInput';
+
+/**
+ * Extracts the exact Problem/Challenge text (مطابق ستون قرمز در پرزنتیشن، اسلایدها و دلیل رد)
+ */
+export function getEffectiveProblemText(item: ProcessedEraItem): string {
+  // ۱. متن چالش/مشکل ثبت شده اختصاصی در فرآیند
+  let prob = (item.problemDescription || '').trim();
+
+  // ۲. بررسی کش مرورگر (در صورتی که در مدال ویرایش ذخیره شده باشد)
+  if (!prob && typeof window !== 'undefined') {
+    prob = (localStorage.getItem(`era_prob_desc_${item.id}`) || '').trim();
+  }
+
+  // ۳. اگر فرآیند وضعیت "رد شده" دارد، دلیل رد همان مشکل/چالش اصلی قرمز است
+  if (!prob && (item.status === 'رد شده' || item.rejectionReason || (item as any)['دلیل رد'])) {
+    prob = (
+      item.rejectionReason ||
+      (item as any)['دلیل رد'] ||
+      (typeof window !== 'undefined' ? localStorage.getItem(`era_rej_reason_${item.id}`) : '') ||
+      ''
+    ).trim();
+  }
+
+  // ۴. خواندن از الگوی پرزنتیشن استاندارد (همان متن ستون قرمز "قبل از ایجاد" یا "مشکلات شناسایی‌شده")
+  if (!prob) {
+    try {
+      const pres = getProcessPresentation(
+        item.processName,
+        item.orgUnit,
+        item.operationType,
+        item.description || ''
+      );
+      if (pres) {
+        const isCreation = item.operationType === 'ایجاد' || item.operationType === 'جدید' || item.operationType === 'اتوماتیک‌سازی';
+        if (isCreation) {
+          prob = (pres.beforeDescription || '').trim();
+          if (!prob && pres.beforePainPoints && pres.beforePainPoints.length > 0) {
+            prob = pres.beforePainPoints.join('\n');
+          }
+        } else {
+          // برای فرآیندهای اصلاحی (ستون قرمز مشکلات شناسایی شده)
+          if (pres.identifiedProblems && pres.identifiedProblems.length > 0) {
+            prob = pres.identifiedProblems.join('\n');
+          } else if (pres.beforeDescription) {
+            prob = pres.beforeDescription.trim();
+          }
+        }
+      }
+    } catch {}
+  }
+
+  return stripHtmlToPlainText(prob);
+}
+
+/**
+ * Extracts the exact Solution/Action text (مطابق ستون سبز در پرزنتیشن و اسلایدها)
+ */
+export function getEffectiveSolutionText(item: ProcessedEraItem): string {
+  // ۱. راهکار اختصاصی ثبت شده توسط کاربر
+  let sol = (item.solutionDescription || '').trim();
+
+  // ۲. بررسی کش مرورگر
+  if (!sol && typeof window !== 'undefined') {
+    sol = (localStorage.getItem(`era_sol_desc_${item.id}`) || '').trim();
+  }
+
+  // ۳. خواندن از الگوی پرزنتیشن استاندارد (اقدامات و راهکار اصلاحی ستون سبز)
+  if (!sol) {
+    try {
+      const pres = getProcessPresentation(
+        item.processName,
+        item.orgUnit,
+        item.operationType,
+        item.description || ''
+      );
+      if (pres) {
+        const isCreation = item.operationType === 'ایجاد' || item.operationType === 'جدید' || item.operationType === 'اتوماتیک‌سازی';
+        if (isCreation) {
+          sol = (pres.afterDescription || '').trim();
+          if (!sol && pres.afterImprovements && pres.afterImprovements.length > 0) {
+            sol = pres.afterImprovements.join('\n');
+          }
+        } else {
+          sol = (pres.solutionApplied || '').trim();
+          if (!sol && pres.solvedOutcomes && pres.solvedOutcomes.length > 0) {
+            sol = pres.solvedOutcomes.join('\n');
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // ۴. در صورتی که راهکاری وجود نداشت، از شرح تغییرات فرآیند استفاده می‌شود
+  if (!sol && item.description) {
+    sol = item.description.trim();
+  }
+
+  return stripHtmlToPlainText(sol);
+}
 
 interface QuickReportModalProps {
   isOpen: boolean;
@@ -134,8 +234,8 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         const mUnit = (it.orgUnit || '').toLowerCase().includes(q);
         const mDate = (it.executionDate || '').includes(q);
         const mDesc = (it.description || '').toLowerCase().includes(q);
-        const mProb = (it.problemDescription || '').toLowerCase().includes(q);
-        const mSol = (it.solutionDescription || '').toLowerCase().includes(q);
+        const mProb = (getEffectiveProblemText(it) || '').toLowerCase().includes(q);
+        const mSol = (getEffectiveSolutionText(it) || '').toLowerCase().includes(q);
         if (!mName && !mUnit && !mDate && !mDesc && !mProb && !mSol) return false;
       }
 
@@ -253,24 +353,22 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         }
       }
 
-      // Problem description (چالش / مشکل)
-      const rawChallenge = (item.problemDescription || '').trim();
-      const cleanChallenge = stripHtmlToPlainText(rawChallenge);
-      if (cleanChallenge) {
-        text += `شرح چالش:\n${cleanChallenge}\n`;
-      } else if (includeDetails) {
-        const rawDesc = (item.description || '').trim();
-        const cleanDesc = stripHtmlToPlainText(rawDesc);
-        text += `شرح چالش:\n${cleanDesc || 'بررسی و شناسایی نیاز فرآیندی'}\n`;
-      }
+      // Problem description (شرح چالش - دقیقاً از ستون قرمز مشکل و چالش شناسایی‌شده)
+      if (includeDetails) {
+        const cleanChallenge = getEffectiveProblemText(item);
+        if (cleanChallenge) {
+          text += `شرح چالش:\n${cleanChallenge}\n`;
+        } else {
+          text += `شرح چالش:\nبررسی و شناسایی نیاز فرآیندی جهت رفع گلوگاه و بهبود گردش‌کار\n`;
+        }
 
-      // Solution description (راهکار انجام شده)
-      const rawSolution = (item.solutionDescription || '').trim();
-      const cleanSolution = stripHtmlToPlainText(rawSolution);
-      if (cleanSolution) {
-        text += `راهکار انجام شده:\n${cleanSolution}\n`;
-      } else if (includeDetails) {
-        text += `راهکار انجام شده:\nپیاده‌سازی و نهایی‌سازی در سامانه سازمانی\n`;
+        // Solution description (راهکار انجام شده - از ستون سبز اقدامات/راهکار)
+        const cleanSolution = getEffectiveSolutionText(item);
+        if (cleanSolution) {
+          text += `راهکار انجام شده:\n${cleanSolution}\n`;
+        } else {
+          text += `راهکار انجام شده:\nپیاده‌سازی، بهینه‌سازی و نهایی‌سازی در سامانه سازمانی\n`;
+        }
       }
 
       // Additional achievements if exists
@@ -719,14 +817,28 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
                           )}
                         </div>
 
-                        {/* Snippet of problem / solution */}
-                        {(item.problemDescription || item.solutionDescription) && (
-                          <div className="mt-1 text-[10px] text-[#8A8880] line-clamp-1">
-                            {item.problemDescription 
-                              ? `چالش: ${stripHtmlToPlainText(item.problemDescription)}` 
-                              : `راهکار: ${stripHtmlToPlainText(item.solutionDescription)}`}
-                          </div>
-                        )}
+                        {/* Snippet of problem (red section) & solution */}
+                        {(() => {
+                          const probText = getEffectiveProblemText(item);
+                          const solText = getEffectiveSolutionText(item);
+                          if (!probText && !solText) return null;
+                          return (
+                            <div className="mt-1 text-[10px] text-[#8A8880] space-y-0.5">
+                              {probText && (
+                                <div className="line-clamp-1">
+                                  <span className="font-bold text-rose-700">چالش: </span>
+                                  <span>{probText}</span>
+                                </div>
+                              )}
+                              {solText && !probText && (
+                                <div className="line-clamp-1">
+                                  <span className="font-bold text-emerald-700">راهکار: </span>
+                                  <span>{solText}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
