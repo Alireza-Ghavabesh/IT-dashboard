@@ -97,6 +97,29 @@ CREATE TABLE IF NOT EXISTS "AppSetting" (
     "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS "DanaTicket" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "ticketId" TEXT UNIQUE,
+    "ticketNumber" INTEGER NOT NULL UNIQUE,
+    "title" TEXT NOT NULL,
+    "status" TEXT NOT NULL DEFAULT 'نامشخص',
+    "statusId" TEXT,
+    "applicantName" TEXT DEFAULT 'ناشناس',
+    "applicantId" TEXT,
+    "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
+    "itStaffId" TEXT,
+    "createDateIso" TEXT,
+    "createDateFa" TEXT,
+    "satisfactionRateName" TEXT,
+    "satisfactionRate" INTEGER,
+    "priorityName" TEXT,
+    "priorityId" TEXT,
+    "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
+    "rawJson" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS "Letter_orgUnit_idx" ON "Letter"("orgUnit");
 CREATE INDEX IF NOT EXISTS "Letter_actionType_idx" ON "Letter"("actionType");
 CREATE INDEX IF NOT EXISTS "Letter_dateStr_idx" ON "Letter"("dateStr");
@@ -109,6 +132,11 @@ CREATE INDEX IF NOT EXISTS "CauseRule_cause_idx" ON "CauseRule"("cause");
 CREATE INDEX IF NOT EXISTS "CauseRule_targetUnit_idx" ON "CauseRule"("targetUnit");
 CREATE INDEX IF NOT EXISTS "ExclusionRule_keyword_idx" ON "ExclusionRule"("keyword");
 CREATE INDEX IF NOT EXISTS "ExclusionRule_targetUnit_idx" ON "ExclusionRule"("targetUnit");
+CREATE INDEX IF NOT EXISTS "DanaTicket_ticketNumber_idx" ON "DanaTicket"("ticketNumber");
+CREATE INDEX IF NOT EXISTS "DanaTicket_status_idx" ON "DanaTicket"("status");
+CREATE INDEX IF NOT EXISTS "DanaTicket_itStaffName_idx" ON "DanaTicket"("itStaffName");
+CREATE INDEX IF NOT EXISTS "DanaTicket_applicantName_idx" ON "DanaTicket"("applicantName");
+CREATE INDEX IF NOT EXISTS "DanaTicket_createDateIso_idx" ON "DanaTicket"("createDateIso");
 `;
 
 /**
@@ -145,6 +173,37 @@ export async function ensureDatabaseHealthy(): Promise<void> {
     await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "targetField" TEXT DEFAULT 'all';`).catch(() => {});
     await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "color" TEXT DEFAULT '#2563EB';`).catch(() => {});
     await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "priority" INTEGER DEFAULT 0;`).catch(() => {});
+
+    // Proactively ensure DanaTicket table and indexes exist
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "DanaTicket" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "ticketId" TEXT UNIQUE,
+        "ticketNumber" INTEGER NOT NULL UNIQUE,
+        "title" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'نامشخص',
+        "statusId" TEXT,
+        "applicantName" TEXT DEFAULT 'ناشناس',
+        "applicantId" TEXT,
+        "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
+        "itStaffId" TEXT,
+        "createDateIso" TEXT,
+        "createDateFa" TEXT,
+        "satisfactionRateName" TEXT,
+        "satisfactionRate" INTEGER,
+        "priorityName" TEXT,
+        "priorityId" TEXT,
+        "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
+        "rawJson" TEXT,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_ticketNumber_idx" ON "DanaTicket"("ticketNumber");`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_status_idx" ON "DanaTicket"("status");`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_itStaffName_idx" ON "DanaTicket"("itStaffName");`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_applicantName_idx" ON "DanaTicket"("applicantName");`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_createDateIso_idx" ON "DanaTicket"("createDateIso");`).catch(() => {});
   } catch (error: any) {
     console.warn('Database health check encountered error:', error?.message || error);
     const isCorrupt = error?.message?.includes('SQLITE_CORRUPT') ||

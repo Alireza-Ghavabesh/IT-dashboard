@@ -1521,3 +1521,38 @@ export function processDanaTickets(rawRows: any[]): import('../types').Processed
     };
   });
 }
+
+/**
+ * Clean HTML tags, convert <br>, <div>, <p> to newlines, and decode HTML entities into clean plain text
+ */
+export function stripHtmlToPlainText(html?: string | null): string {
+  if (!html) return '';
+  let str = String(html);
+
+  // Replace common block and break tags with newlines before stripping
+  str = str
+    .replace(/<br\s*[\/]?>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<div>/gi, '')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<p>/gi, '')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<li>/gi, '• ');
+
+  // Strip all remaining HTML tags
+  str = str.replace(/<[^>]+>/g, '');
+
+  // Decode common HTML entities
+  str = str
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+
+  // Clean up excessive blank lines (more than 2 consecutive newlines)
+  str = str.replace(/\n{3,}/g, '\n\n');
+
+  return str.trim();
+}

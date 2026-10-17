@@ -23,7 +23,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
-import { getCurrentJalaliDate, formatNumber, isDateInRange } from '../utils/parser';
+import { getCurrentJalaliDate, formatNumber, isDateInRange, stripHtmlToPlainText } from '../utils/parser';
 import { JalaliDateInput } from './JalaliDateInput';
 
 interface QuickReportModalProps {
@@ -236,29 +236,39 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
 
     selectedItemsList.forEach((item, index) => {
       const num = index + 1;
-      text += `${num}- ${item.processName || 'فرآیند بدون عنوان'}\n`;
+      const cleanName = stripHtmlToPlainText(item.processName) || 'فرآیند بدون عنوان';
+      text += `${num}- ${cleanName}\n`;
 
       if (includeUnitInItem && item.orgUnit) {
-        text += `واحد سازمانی: ${item.orgUnit}\n`;
+        const cleanUnit = stripHtmlToPlainText(item.orgUnit);
+        if (cleanUnit) {
+          text += `واحد سازمانی: ${cleanUnit}\n`;
+        }
       }
 
       if (includeDateInItem && item.executionDate) {
-        text += `تاریخ انجام: ${item.executionDate}\n`;
+        const cleanDate = stripHtmlToPlainText(item.executionDate);
+        if (cleanDate) {
+          text += `تاریخ انجام: ${cleanDate}\n`;
+        }
       }
 
       // Problem description (چالش / مشکل)
-      const challenge = (item.problemDescription || '').trim();
-      if (challenge) {
-        text += `شرح چالش:\n${challenge}\n`;
+      const rawChallenge = (item.problemDescription || '').trim();
+      const cleanChallenge = stripHtmlToPlainText(rawChallenge);
+      if (cleanChallenge) {
+        text += `شرح چالش:\n${cleanChallenge}\n`;
       } else if (includeDetails) {
-        const desc = (item.description || '').trim();
-        text += `شرح چالش:\n${desc || 'بررسی و شناسایی نیاز فرآیندی'}\n`;
+        const rawDesc = (item.description || '').trim();
+        const cleanDesc = stripHtmlToPlainText(rawDesc);
+        text += `شرح چالش:\n${cleanDesc || 'بررسی و شناسایی نیاز فرآیندی'}\n`;
       }
 
       // Solution description (راهکار انجام شده)
-      const solution = (item.solutionDescription || '').trim();
-      if (solution) {
-        text += `راهکار انجام شده:\n${solution}\n`;
+      const rawSolution = (item.solutionDescription || '').trim();
+      const cleanSolution = stripHtmlToPlainText(rawSolution);
+      if (cleanSolution) {
+        text += `راهکار انجام شده:\n${cleanSolution}\n`;
       } else if (includeDetails) {
         text += `راهکار انجام شده:\nپیاده‌سازی و نهایی‌سازی در سامانه سازمانی\n`;
       }
@@ -266,7 +276,9 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
       // Additional achievements if exists
       if (item.achievements) {
         const achList = Array.isArray(item.achievements) ? item.achievements : [item.achievements];
-        const cleanAch = achList.filter(a => a && typeof a === 'string' && a.trim().length > 0);
+        const cleanAch = achList
+          .map(a => stripHtmlToPlainText(a))
+          .filter(a => a && a.trim().length > 0);
         if (cleanAch.length > 0) {
           text += `دستاوردها:\n${cleanAch.map(a => `• ${a.trim()}`).join('\n')}\n`;
         }
@@ -710,7 +722,9 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
                         {/* Snippet of problem / solution */}
                         {(item.problemDescription || item.solutionDescription) && (
                           <div className="mt-1 text-[10px] text-[#8A8880] line-clamp-1">
-                            {item.problemDescription ? `چالش: ${item.problemDescription}` : `راهکار: ${item.solutionDescription}`}
+                            {item.problemDescription 
+                              ? `چالش: ${stripHtmlToPlainText(item.problemDescription)}` 
+                              : `راهکار: ${stripHtmlToPlainText(item.solutionDescription)}`}
                           </div>
                         )}
                       </div>

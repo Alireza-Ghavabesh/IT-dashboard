@@ -2672,12 +2672,46 @@ ${JSON.stringify(promptPayload, null, 2)}
       });
 
       // Query dedicated DanaTicket table ordered by ticketNumber desc
-      const dbTickets = await prisma.danaTicket.findMany({
-        orderBy: { ticketNumber: 'desc' },
-        take: 1000 // fast indexed retrieval
-      });
+      let dbTickets: any[] = [];
+      let totalRows = 0;
 
-      let totalRows = await prisma.danaTicket.count();
+      try {
+        dbTickets = await prisma.danaTicket.findMany({
+          orderBy: { ticketNumber: 'desc' },
+          take: 1000 // fast indexed retrieval
+        });
+        totalRows = await prisma.danaTicket.count();
+      } catch (dbErr: any) {
+        console.warn('DanaTicket table query failed, ensuring table exists and falling back:', dbErr?.message);
+        // Automatically create table if missing
+        await prisma.$executeRawUnsafe(`
+          CREATE TABLE IF NOT EXISTS "DanaTicket" (
+            "id" TEXT NOT NULL PRIMARY KEY,
+            "ticketId" TEXT UNIQUE,
+            "ticketNumber" INTEGER NOT NULL UNIQUE,
+            "title" TEXT NOT NULL,
+            "status" TEXT NOT NULL DEFAULT 'نامشخص',
+            "statusId" TEXT,
+            "applicantName" TEXT DEFAULT 'ناشناس',
+            "applicantId" TEXT,
+            "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
+            "itStaffId" TEXT,
+            "createDateIso" TEXT,
+            "createDateFa" TEXT,
+            "satisfactionRateName" TEXT,
+            "satisfactionRate" INTEGER,
+            "priorityName" TEXT,
+            "priorityId" TEXT,
+            "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
+            "rawJson" TEXT,
+            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+        `).catch(() => {});
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_ticketNumber_idx" ON "DanaTicket"("ticketNumber");`).catch(() => {});
+        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_status_idx" ON "DanaTicket"("status");`).catch(() => {});
+      }
+
       let tickets: any[] = [];
 
       if (dbTickets.length > 0) {
@@ -2708,7 +2742,7 @@ ${JSON.stringify(promptPayload, null, 2)}
         // Fallback to AppSetting if old data exists
         const setting = await prisma.appSetting.findUnique({
           where: { key: 'dana_tickets_data' }
-        });
+        }).catch(() => null);
         if (setting && setting.value) {
           try {
             const parsed = JSON.parse(setting.value);
