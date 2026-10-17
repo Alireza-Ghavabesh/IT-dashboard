@@ -2682,34 +2682,46 @@ ${JSON.stringify(promptPayload, null, 2)}
         });
         totalRows = await prisma.danaTicket.count();
       } catch (dbErr: any) {
-        console.warn('DanaTicket table query failed, ensuring table exists and falling back:', dbErr?.message);
+        console.warn('DanaTicket table query failed, ensuring table exists and retrying:', dbErr?.message);
         // Automatically create table if missing
-        await prisma.$executeRawUnsafe(`
-          CREATE TABLE IF NOT EXISTS "DanaTicket" (
-            "id" TEXT NOT NULL PRIMARY KEY,
-            "ticketId" TEXT UNIQUE,
-            "ticketNumber" INTEGER NOT NULL UNIQUE,
-            "title" TEXT NOT NULL,
-            "status" TEXT NOT NULL DEFAULT 'نامشخص',
-            "statusId" TEXT,
-            "applicantName" TEXT DEFAULT 'ناشناس',
-            "applicantId" TEXT,
-            "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
-            "itStaffId" TEXT,
-            "createDateIso" TEXT,
-            "createDateFa" TEXT,
-            "satisfactionRateName" TEXT,
-            "satisfactionRate" INTEGER,
-            "priorityName" TEXT,
-            "priorityId" TEXT,
-            "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
-            "rawJson" TEXT,
-            "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-          );
-        `).catch(() => {});
-        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_ticketNumber_idx" ON "DanaTicket"("ticketNumber");`).catch(() => {});
-        await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_status_idx" ON "DanaTicket"("status");`).catch(() => {});
+        try {
+          await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "DanaTicket" (
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "ticketId" TEXT UNIQUE,
+              "ticketNumber" INTEGER NOT NULL UNIQUE,
+              "title" TEXT NOT NULL,
+              "status" TEXT NOT NULL DEFAULT 'نامشخص',
+              "statusId" TEXT,
+              "applicantName" TEXT DEFAULT 'ناشناس',
+              "applicantId" TEXT,
+              "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
+              "itStaffId" TEXT,
+              "createDateIso" TEXT,
+              "createDateFa" TEXT,
+              "satisfactionRateName" TEXT,
+              "satisfactionRate" INTEGER,
+              "priorityName" TEXT,
+              "priorityId" TEXT,
+              "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
+              "rawJson" TEXT,
+              "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+          await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_ticketNumber_idx" ON "DanaTicket"("ticketNumber");`).catch(() => {});
+          await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DanaTicket_status_idx" ON "DanaTicket"("status");`).catch(() => {});
+
+          dbTickets = await prisma.danaTicket.findMany({
+            orderBy: { ticketNumber: 'desc' },
+            take: 1000
+          });
+          totalRows = await prisma.danaTicket.count();
+        } catch (retryErr: any) {
+          console.warn('Retry after table creation failed, continuing gracefully:', retryErr?.message);
+          dbTickets = [];
+          totalRows = 0;
+        }
       }
 
       let tickets: any[] = [];
@@ -2780,6 +2792,33 @@ ${JSON.stringify(promptPayload, null, 2)}
       const rows = Array.isArray(tickets) ? tickets : [];
 
       if (rows.length > 0) {
+        // Automatically ensure table exists before inserting
+        try {
+          await prisma.$executeRawUnsafe(`
+            CREATE TABLE IF NOT EXISTS "DanaTicket" (
+              "id" TEXT NOT NULL PRIMARY KEY,
+              "ticketId" TEXT UNIQUE,
+              "ticketNumber" INTEGER NOT NULL UNIQUE,
+              "title" TEXT NOT NULL,
+              "status" TEXT NOT NULL DEFAULT 'نامشخص',
+              "statusId" TEXT,
+              "applicantName" TEXT DEFAULT 'ناشناس',
+              "applicantId" TEXT,
+              "itStaffName" TEXT DEFAULT 'تخصیص‌نیافته',
+              "itStaffId" TEXT,
+              "createDateIso" TEXT,
+              "createDateFa" TEXT,
+              "satisfactionRateName" TEXT,
+              "satisfactionRate" INTEGER,
+              "priorityName" TEXT,
+              "priorityId" TEXT,
+              "isRemoved" BOOLEAN NOT NULL DEFAULT 0,
+              "rawJson" TEXT,
+              "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+        } catch {}
         // Upsert each ticket into dedicated DanaTicket table
         for (const row of rows) {
           const ticketNumber = typeof row.TicketNumber === 'number'

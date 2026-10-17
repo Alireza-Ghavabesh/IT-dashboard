@@ -6,11 +6,38 @@ import fs from 'fs';
 // Handle ESM / CJS module interop for @prisma/client across Node versions
 const PrismaClientConstructor = (pkg as any).PrismaClient || (pkg as any).default?.PrismaClient || pkg;
 
-const dbPath = path.resolve(process.cwd(), 'dev.db');
+function resolveDatabasePath(): string {
+  const rootDb = path.resolve(process.cwd(), 'dev.db');
+  const prismaDb = path.resolve(process.cwd(), 'prisma', 'dev.db');
+
+  if (fs.existsSync(prismaDb) && !fs.existsSync(rootDb)) {
+    return prismaDb;
+  }
+  if (fs.existsSync(prismaDb) && fs.existsSync(rootDb)) {
+    try {
+      const rootStat = fs.statSync(rootDb);
+      const prismaStat = fs.statSync(prismaDb);
+      if (prismaStat.size > rootStat.size) {
+        return prismaDb;
+      }
+    } catch {}
+  }
+  return rootDb;
+}
+
+const dbPath = resolveDatabasePath();
+
+function getLibSqlUrl(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  if (process.platform === 'win32' && !normalized.startsWith('/')) {
+    return `file:///${normalized}`;
+  }
+  return `file:${normalized}`;
+}
 
 function createPrismaInstance() {
   const adapter = new PrismaLibSql({
-    url: `file:${dbPath}`
+    url: getLibSqlUrl(dbPath)
   });
   return new (PrismaClientConstructor as any)({ adapter });
 }
