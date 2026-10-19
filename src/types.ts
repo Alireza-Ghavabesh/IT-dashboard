@@ -151,6 +151,8 @@ export interface RawEraItem {
   "نام فرایند": string;
   "واحد سازمانی": string;
   "تاریخ انجام": string;
+  "تاریخ ثبت"?: string;
+  registrationDate?: string;
   "نوع عملیات": EraOperationType;
   "نوع موجودیت"?: EraEntityType;
   entityType?: EraEntityType;
@@ -188,6 +190,7 @@ export interface ProcessedEraItem {
   processName: string;
   orgUnit: string;
   executionDate: string; // e.g. "1405/03/28"
+  registrationDate: string; // تاریخ ثبت فرآیند در سامانه (سیستمی و غیرقابل تغییر پس از اولین ثبت)
   year: string;
   month: string;
   monthName: string;
@@ -268,6 +271,7 @@ export interface EraColumnVisibility {
   processName: boolean;     // نام فرآیند / موجودیت
   entityType: boolean;      // نوع
   orgUnit: boolean;         // واحد سازمانی
+  registrationDate?: boolean; // تاریخ ثبت فرآیند در سامانه
   executionDate: boolean;   // تاریخ انجام
   operationType: boolean;   // نوع عملیات
   assignee: boolean;        // اقدام‌کننده مسئول فرآیند
@@ -285,6 +289,7 @@ export const DEFAULT_ERA_COLUMN_VISIBILITY: EraColumnVisibility = {
   processName: true,
   entityType: true,
   orgUnit: true,
+  registrationDate: true,
   executionDate: true,
   operationType: true,
   assignee: true,

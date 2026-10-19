@@ -11,7 +11,8 @@ import {
   ChevronRight,
   X,
   MoveHorizontal,
-  Layers
+  Layers,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ProcessedEraItem } from '../types';
@@ -206,10 +207,17 @@ export const EraSlideHoverPreview: React.FC<EraSlideHoverPreviewProps> = ({
                 <Building2 className="h-3.5 w-3.5 text-white/70" />
                 <span className="font-bold">{item.orgUnit}</span>
               </span>
+              <span 
+                className="text-xs text-white/90 bg-white/15 border border-white/25 px-2 py-0.5 rounded-lg flex items-center gap-1 font-mono shrink-0 hidden lg:flex shadow-2xs"
+                title="تاریخ اولین ثبت فرآیند در سامانه (سیستمی و غیرقابل تغییر)"
+              >
+                <Lock className="h-3 w-3 text-white/70" />
+                <span>ثبت: {item.registrationDate || (item as any)["تاریخ ثبت"] || item.executionDate}</span>
+              </span>
               {item.executionDate && (
-                <span className="text-xs text-white/70 flex items-center gap-1 font-mono shrink-0 hidden md:flex">
+                <span className="text-xs text-white/80 flex items-center gap-1 font-mono shrink-0 hidden md:flex">
                   <Calendar className="h-3.5 w-3.5 text-white/60" />
-                  <span>{item.executionDate}</span>
+                  <span>اجرا: {item.executionDate}</span>
                 </span>
               )}
             </div>

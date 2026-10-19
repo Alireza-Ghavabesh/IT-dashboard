@@ -61,6 +61,36 @@ export function getCurrentJalaliDate(): { year: number; month: number; day: numb
 }
 
 /**
+ * Formats a given Date, timestamp, or ISO string to standard Jalali YYYY/MM/DD string
+ */
+export function formatToJalaliDate(dateInput?: string | Date | number | null): string {
+  if (!dateInput) return getCurrentJalaliDate().str;
+  try {
+    // If it's already a Jalali string like 1403/05/12
+    const str = String(dateInput).trim();
+    if (/^1[34]\d{2}\/\d{1,2}\/\d{1,2}/.test(str)) {
+      return str;
+    }
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) {
+      return getCurrentJalaliDate().str;
+    }
+    const parts = new Intl.DateTimeFormat('fa-IR-u-ca-persian-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(d);
+    const y = parts.find(p => p.type === 'year')?.value;
+    const m = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    if (y && m && day) {
+      return `${y}/${m.padStart(2, '0')}/${day.padStart(2, '0')}`;
+    }
+  } catch {}
+  return getCurrentJalaliDate().str;
+}
+
+/**
  * Calculates a Jalali date N months ago from a reference date
  */
 export function getJalaliMonthsAgo(monthsAgo: number, refYear?: number, refMonth?: number, refDay?: number): string {
@@ -1164,6 +1194,34 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
     if (typeof assignee === 'string') {
       assignee = assignee.trim() || undefined;
     }
+    if (!assignee && typeof window !== 'undefined') {
+      const cachedAssignee = localStorage.getItem(`era_assignee_${finalId}`) || localStorage.getItem(`era_assignee_${baseId}`);
+      if (cachedAssignee && cachedAssignee.trim()) {
+        assignee = cachedAssignee.trim();
+      }
+    }
+
+    // Process Registration Date (تاریخ ثبت فرآیند در سامانه - سیستمی و غیرقابل تغییر پس از اولین ثبت)
+    let registrationDate: string = (
+      item.registrationDate ||
+      rawAny["registrationDate"] ||
+      rawAny["تاریخ ثبت"] ||
+      rawAny["تاریخ_ثبت"] ||
+      ''
+    ).toString().trim();
+
+    if (!registrationDate) {
+      if (item.createdAt) {
+        registrationDate = formatToJalaliDate(item.createdAt);
+      } else if (typeof window !== 'undefined') {
+        const cachedReg = localStorage.getItem(`era_reg_date_${finalId}`) || localStorage.getItem(`era_reg_date_${baseId}`);
+        if (cachedReg) registrationDate = cachedReg.trim();
+      }
+    }
+
+    if (!registrationDate) {
+      registrationDate = dateParsed.dateStr || getCurrentJalaliDate().str;
+    }
 
     // Process Note File attachment (pdf, xlsx, rar, zip)
     let noteFile: any = (
@@ -1286,6 +1344,7 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       processName,
       orgUnit,
       executionDate: dateParsed.dateStr,
+      registrationDate,
       year: dateParsed.year,
       month: dateParsed.month,
       monthName: dateParsed.monthName,

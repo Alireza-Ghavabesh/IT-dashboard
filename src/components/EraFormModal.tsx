@@ -32,12 +32,13 @@ import {
   FileSpreadsheet,
   UserCheck,
   User,
-  Users
+  Users,
+  Lock
 } from 'lucide-react';
 import { ProcessedEraItem, RawEraItem, EraNoteFile } from '../types';
 import { JalaliDateInput } from './JalaliDateInput';
 import { RichTextEditor } from './RichTextEditor';
-import { getCurrentJalaliDate, formatNumber } from '../utils/parser';
+import { getCurrentJalaliDate, formatToJalaliDate, formatNumber } from '../utils/parser';
 import { api } from '../services/api';
 
 interface EraFormModalProps {
@@ -68,6 +69,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   const [processName, setProcessName] = useState('');
   const [orgUnit, setOrgUnit] = useState('');
   const [executionDate, setExecutionDate] = useState(() => getCurrentJalaliDate().str);
+  const [registrationDate, setRegistrationDate] = useState<string>(() => getCurrentJalaliDate().str);
   const [operationType, setOperationType] = useState<'جدید' | 'اصلاح' | 'اتوماتیک‌سازی'>('اصلاح');
   const [entityType, setEntityType] = useState<'فرم' | 'فرآیند' | 'گزارش'>('فرآیند');
   const [status, setStatus] = useState<'برای انجام' | 'درحال انجام' | 'انجام شده' | 'رد شده'>('برای انجام');
@@ -129,12 +131,24 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       setOrgUnit(initialItem.orgUnit);
       setExecutionDate(initialItem.executionDate || getCurrentJalaliDate().str);
 
-      const initAssignee = (
+      const initReg = (
+        initialItem.registrationDate ||
+        (initialItem as any)["تاریخ ثبت"] ||
+        (initialItem.createdAt ? formatToJalaliDate(initialItem.createdAt) : '') ||
+        (initialItem.id && typeof window !== 'undefined' ? (localStorage.getItem(`era_reg_date_${initialItem.id}`) || '') : '') ||
+        getCurrentJalaliDate().str
+      ).trim();
+      setRegistrationDate(initReg);
+
+      let initAssignee = (
         initialItem.assignee ||
         (initialItem as any)["اقدام کننده"] ||
         (initialItem as any)["اقدام‌کننده"] ||
         ''
       ).trim();
+      if (!initAssignee && initialItem.id && typeof window !== 'undefined') {
+        initAssignee = (localStorage.getItem(`era_assignee_${initialItem.id}`) || '').trim();
+      }
       setAssignee(initAssignee);
       
       const op = (initialItem.operationType || (initialItem as any)["نوع عملیات"] || '').trim();
@@ -311,6 +325,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       setProcessName('');
       setOrgUnit(existingUnits[0] || 'فروش');
       setExecutionDate(getCurrentJalaliDate().str);
+      setRegistrationDate(getCurrentJalaliDate().str);
       setOperationType('اصلاح');
       setEntityType('فرآیند');
       setStatus('برای انجام');
@@ -578,6 +593,14 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
         } else {
           localStorage.removeItem(`era_rej_reason_${savedId}`);
         }
+        if (assignee.trim()) {
+          localStorage.setItem(`era_assignee_${savedId}`, assignee.trim());
+        } else {
+          localStorage.removeItem(`era_assignee_${savedId}`);
+        }
+        if (registrationDate) {
+          localStorage.setItem(`era_reg_date_${savedId}`, registrationDate);
+        }
         if (noteFile) {
           localStorage.setItem(`era_notefile_${savedId}`, JSON.stringify(noteFile));
         } else {
@@ -588,15 +611,23 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       }
     }
 
+    const trimmedAssignee = assignee.trim();
+    if (trimmedAssignee && !dbAssignees.includes(trimmedAssignee)) {
+      const updatedList = [...dbAssignees, trimmedAssignee];
+      setDbAssignees(updatedList);
+      api.saveAssignees(updatedList).catch(() => {});
+    }
+
     onSave({
       id: savedId,
       processName: processName.trim(),
       orgUnit: orgUnit.trim(),
       executionDate: executionDate.trim(),
+      registrationDate: registrationDate || getCurrentJalaliDate().str,
       operationType,
       entityType,
       status,
-      assignee: assignee.trim() || undefined,
+      assignee: trimmedAssignee,
       rejectionReason: status === 'رد شده' ? rejectionReason.trim() : undefined,
       noteFile: noteFile || null,
       description: description.trim(),
@@ -660,8 +691,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
           {/* Core Info Grid: Process Name, Org Unit, Execution Date, Entity Type, Operation Type */}
           <div className="bg-[#FAF9F5] p-4 sm:p-5 rounded-2xl border border-[#DCD9CE] space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4">
-              {/* Process Name (Span 6 on large screens) */}
-              <div className="lg:col-span-6">
+              {/* Process Name (Span 4 on large screens) */}
+              <div className="lg:col-span-4">
                 <label className="block font-bold text-[#4B5344] mb-1.5">
                   نام فرآیند / موجودیت: *
                 </label>
@@ -727,6 +758,26 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                   placeholder={getCurrentJalaliDate().str}
                   inputClassName="px-3.5 py-2.5 rounded-xl text-xs font-bold font-mono"
                 />
+              </div>
+
+              {/* Registration Date (Span 2 on large screens - Read-Only / System Generated) */}
+              <div className="lg:col-span-2">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="flex items-center gap-1 font-bold text-[#4B5344]" title="تاریخ اولین ثبت فرآیند - غیرقابل ویرایش">
+                    <Lock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>تاریخ ثبت:</span>
+                  </label>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono border border-slate-200">
+                    سیستمی
+                  </span>
+                </div>
+                <div 
+                  className="w-full bg-[#EAE8E1]/80 border border-[#DDDBCF] rounded-xl px-3 py-2.5 text-[#5A5852] text-xs font-mono font-bold flex items-center justify-between cursor-not-allowed select-none shadow-2xs"
+                  title="این تاریخ مربوط به اولین ثبت این فرآیند در سامانه است و غیرقابل ویرایش می‌باشد."
+                >
+                  <span>{registrationDate || getCurrentJalaliDate().str}</span>
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                </div>
               </div>
             </div>
 

@@ -38,7 +38,8 @@ import {
   GripVertical,
   GripHorizontal,
   Workflow,
-  Columns2
+  Columns2,
+  UserCheck
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import {
@@ -648,23 +649,15 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
             : false)
         : false);
 
-  // Before Description & Pain points (Prioritizes user's custom problemDescription from edit modal)
+  // Before Description & Pain points (تنها متن ثبت‌شده توسط کاربر؛ در صورت خالی بودن، خالی می‌ماند)
   const customProblem = currentItem.problemDescription?.trim() 
     || (typeof window !== 'undefined' ? localStorage.getItem(`era_prob_desc_${currentItem.id}`) : null);
-  const beforeText = customProblem
-    || (isCreation
-        ? (presentation?.beforeDescription || `قبل از ایجاد فرم، فرآیند «${currentItem.processName}» به صورت دستی و کاغذی انجام می‌شد که باعث تاخیر و اتلاف وقت می‌گردید.`)
-        : (presentation?.identifiedProblems && presentation.identifiedProblems.length > 0
-            ? presentation.identifiedProblems.join('\n')
-            : currentItem.description || 'نیاز به اصلاح ساختار، دسترسی‌ها یا خطای عملکردی'));
+  const beforeText = customProblem || '';
 
-  // After Description & Improvements (Prioritizes user's custom solutionDescription from edit modal)
+  // After Description & Improvements (تنها متن راهکار ثبت‌شده توسط کاربر؛ در صورت خالی بودن، خالی می‌ماند)
   const customSolution = currentItem.solutionDescription?.trim()
     || (typeof window !== 'undefined' ? localStorage.getItem(`era_sol_desc_${currentItem.id}`) : null);
-  const afterText = customSolution
-    || (isCreation
-        ? (presentation?.afterDescription || `با راه‌اندازی فرآیند مکانیزه در سامانه ERA، تمام مراحل ثبت و تایید بدون کاغذ و به صورت برخط انجام می‌شود. (${currentItem.description || ''})`)
-        : (presentation?.solutionApplied || `تیم فناوری اطلاعات تغییرات لازم را در گردش‌کار اعمال و بهینه‌سازی نمود: ${currentItem.description || ''}`));
+  const afterText = customSolution || '';
 
   // Quantitative Metrics (User custom editable first, then AI/standard fallback)
   const customTimeMetric = currentItem.impactTimeMetric?.trim()
@@ -720,6 +713,12 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
               }`}>
                 {isAuto ? 'اتوماتیک‌سازی هوشمند' : isCreation ? 'فرم و فرآیند جدید' : 'اصلاح فرآیندی'}
               </span>
+              {currentItem.assignee && (
+                <span className="text-[11px] font-bold text-emerald-850 px-2 py-0.5 bg-emerald-50 rounded-md border border-emerald-300 flex items-center gap-1 shadow-2xs" title={`اقدام‌کننده مسئول: ${currentItem.assignee}`}>
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>{currentItem.assignee}</span>
+                </span>
+              )}
             </div>
             <h2 className="text-sm sm:text-base font-black text-[#2D2C28] mt-0.5 truncate">
               {currentItem.processName}
@@ -1295,7 +1294,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                       <RichTextDisplay
                         content={beforeText}
                         className="text-[11px] sm:text-xs text-[#4A4944] font-medium"
-                        fallbackText="موردی برای قبل از اقدام ثبت نشده است."
+                        fallbackText="—"
                       />
                     </div>
                   </div>
@@ -1323,7 +1322,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                       <RichTextDisplay
                         content={afterText}
                         className="text-[11px] sm:text-xs text-[#4A4944] font-medium"
-                        fallbackText="موردی برای بعد از اقدام ثبت نشده است."
+                        fallbackText="—"
                       />
                     </div>
                   </div>
@@ -1429,7 +1428,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   <RichTextDisplay
                     content={beforeText}
                     className="text-xs sm:text-sm text-rose-950 font-medium"
-                    fallbackText="موردی برای قبل از اقدام ثبت نشده است."
+                    fallbackText="—"
                   />
                 </div>
               </div>
@@ -1457,7 +1456,7 @@ export const SlideshowView: React.FC<SlideshowViewProps> = ({
                   <RichTextDisplay
                     content={afterText}
                     className="text-xs sm:text-sm text-emerald-950 font-medium"
-                    fallbackText="موردی برای بعد از اقدام ثبت نشده است."
+                    fallbackText="—"
                   />
                 </div>
               </div>

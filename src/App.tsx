@@ -1038,6 +1038,8 @@ export default function App() {
         orgUnit: item.orgUnit || '',
         "تاریخ انجام": item.executionDate || getCurrentJalaliDate().str,
         executionDate: item.executionDate || getCurrentJalaliDate().str,
+        "تاریخ ثبت": item.registrationDate || getCurrentJalaliDate().str,
+        registrationDate: item.registrationDate || getCurrentJalaliDate().str,
         "نوع عملیات": item.operationType || 'اصلاح',
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
@@ -1075,6 +1077,8 @@ export default function App() {
         orgUnit: item.orgUnit || '',
         "تاریخ انجام": item.executionDate || getCurrentJalaliDate().str,
         executionDate: item.executionDate || getCurrentJalaliDate().str,
+        "تاریخ ثبت": item.registrationDate || getCurrentJalaliDate().str,
+        registrationDate: item.registrationDate || getCurrentJalaliDate().str,
         "نوع عملیات": item.operationType || 'اصلاح',
         operationType: item.operationType || 'اصلاح',
         "نوع موجودیت": item.entityType || 'فرآیند',
@@ -1125,7 +1129,10 @@ export default function App() {
           const updatedOpType = item.operationType !== undefined ? item.operationType : (p.operationType || p["نوع عملیات"] || 'اصلاح');
           const updatedEntityType = item.entityType !== undefined ? item.entityType : (p.entityType || p["نوع موجودیت"] || 'فرآیند');
           const updatedStatus = item.status !== undefined ? item.status : (p.status || p["وضعیت"] || 'انجام شده');
-          const updatedAssignee = item.assignee !== undefined ? (item.assignee || undefined) : (p.assignee || p["اقدام کننده"] || p["اقدام‌کننده"]);
+          const hasAssigneeProp = 'assignee' in item || 'اقدام کننده' in item || 'اقدام‌کننده' in item;
+          const updatedAssignee = hasAssigneeProp
+            ? ((item.assignee || (item as any)["اقدام کننده"] || (item as any)["اقدام‌کننده"] || '').trim() || undefined)
+            : (p.assignee || p["اقدام کننده"] || p["اقدام‌کننده"]);
           const updatedDesc = item.description !== undefined ? item.description : (p.description || p["توضیحات"] || '');
 
           return {
@@ -1138,6 +1145,8 @@ export default function App() {
             orgUnit: updatedUnit,
             "تاریخ انجام": updatedDate,
             executionDate: updatedDate,
+            "تاریخ ثبت": p.registrationDate || (p as any)["تاریخ ثبت"] || item.registrationDate || getCurrentJalaliDate().str,
+            registrationDate: p.registrationDate || (p as any)["تاریخ ثبت"] || item.registrationDate || getCurrentJalaliDate().str,
             "نوع عملیات": updatedOpType,
             operationType: updatedOpType,
             "نوع موجودیت": updatedEntityType,
@@ -1189,12 +1198,33 @@ export default function App() {
           localStorage.removeItem(`era_rej_reason_${item.id}`);
         } catch {}
       }
+
+      if ('assignee' in item || (item as any)['اقدام کننده'] !== undefined || (item as any)['اقدام‌کننده'] !== undefined) {
+        const aVal = (item.assignee || (item as any)['اقدام کننده'] || (item as any)['اقدام‌کننده'] || '').trim();
+        try {
+          if (aVal) {
+            localStorage.setItem(`era_assignee_${item.id}`, aVal);
+          } else {
+            localStorage.removeItem(`era_assignee_${item.id}`);
+          }
+        } catch {}
+      }
     }
 
     try {
       const targetDbId = (item as any)._dbId || item.id;
       if (targetDbId) {
-        await api.updateEraItem(targetDbId, item);
+        const payloadToUpdate = {
+          ...item,
+          assignee: 'assignee' in item
+            ? ((item.assignee || '').trim() || null)
+            : ((item as any)['اقدام کننده'] !== undefined
+                ? (((item as any)['اقدام کننده'] || '').trim() || null)
+                : ((item as any)['اقدام‌کننده'] !== undefined
+                    ? (((item as any)['اقدام‌کننده'] || '').trim() || null)
+                    : undefined))
+        };
+        await api.updateEraItem(targetDbId, payloadToUpdate);
       }
       await loadDatabaseData(false);
       showToast(`فرآیند "${item.processName || ''}" با موفقیت به‌روزرسانی شد.`);

@@ -22,6 +22,8 @@ import {
   Info,
   FilterX,
   FileSpreadsheet,
+  Calendar,
+  Lock,
   Save,
   ChevronDown,
   ChevronRight,
@@ -187,6 +189,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [newAssigneeName, setNewAssigneeName] = useState<string>('');
   const [editingAssigneeIndex, setEditingAssigneeIndex] = useState<number | null>(null);
   const [editingAssigneeName, setEditingAssigneeName] = useState<string>('');
+  const [confirmDeleteAssignee, setConfirmDeleteAssignee] = useState<string | null>(null);
   const [assigneeSearchQuery, setAssigneeSearchQuery] = useState<string>('');
   const [assigneeSaveMessage, setAssigneeSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
@@ -2612,18 +2615,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     >
                                       <Edit2 className="h-3.5 w-3.5" />
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        if (window.confirm(`آیا از حذف اقدام‌کننده «${name}» از لیست دیتابیس اطمینان دارید؟`)) {
-                                          handleDeleteAssignee(name);
-                                        }
-                                      }}
-                                      className="p-1 text-[#5A5852] hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                      title="حذف اقدام‌کننده"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
+                                    {confirmDeleteAssignee === name ? (
+                                      <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-lg p-0.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            handleDeleteAssignee(name);
+                                            setConfirmDeleteAssignee(null);
+                                          }}
+                                          className="px-2 py-0.5 text-[10px] font-black text-white bg-rose-600 hover:bg-rose-700 rounded transition cursor-pointer"
+                                          title="حذف نهایی"
+                                        >
+                                          حذف
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setConfirmDeleteAssignee(null)}
+                                          className="px-1.5 py-0.5 text-[10px] font-bold text-gray-600 hover:bg-gray-200 rounded transition cursor-pointer"
+                                          title="انصراف"
+                                        >
+                                          ✕
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        onClick={() => setConfirmDeleteAssignee(name)}
+                                        className="p-1 text-[#5A5852] hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                        title="حذف اقدام‌کننده"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </>
@@ -3719,8 +3742,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     { key: 'processName' as const, label: 'نام فرآیند / موجودیت', desc: 'عنوان کامل فرآیند، فرم، یا گزارش', icon: FileSpreadsheet },
                     { key: 'entityType' as const, label: 'نوع موجودیت', desc: 'تفکیک برچسب فرآیند، فرم یا گزارش', icon: Layers },
                     { key: 'orgUnit' as const, label: 'واحد سازمانی', desc: 'دپارتمان یا واحد متولی سازمانی', icon: HardDrive },
-                    { key: 'executionDate' as const, label: 'تاریخ انجام', desc: 'تاریخ ثبت و انجام عملیات فرآیندی', icon: Info },
+                    { key: 'registrationDate' as const, label: 'تاریخ ثبت (سیستمی)', desc: 'تاریخ اولین ثبت فرآیند در سامانه (غیرقابل تغییر)', icon: Lock },
+                    { key: 'executionDate' as const, label: 'تاریخ انجام', desc: 'تاریخ ثبت و انجام عملیات فرآیندی', icon: Calendar },
                     { key: 'operationType' as const, label: 'نوع عملیات', desc: 'جدید، اصلاح یا اتوماتیک‌سازی', icon: Tag },
+                    { key: 'assignee' as const, label: 'اقدام‌کننده', desc: 'مسئول و اقدام‌کننده انجام فرآیند', icon: Users },
                     { key: 'status' as const, label: 'وضعیت انجام', desc: 'انجام شده، درحال انجام، برای انجام، رد شده', icon: CheckCircle2 },
                     { key: 'noteFile' as const, label: 'فایل یادداشت (پیوست)', desc: 'نمایش و دانلود فایل یادداشت (pdf/xlsx/rar/zip)', icon: Paperclip },
                     { key: 'description' as const, label: 'شرح و توضیحات', desc: 'خلاصه متن تغییرات و شرح اقدامات', icon: Edit2 },

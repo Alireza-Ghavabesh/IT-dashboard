@@ -32,23 +32,25 @@ model Letter {
 }
 
 model EraProcess {
-  id            String   @id @default(cuid())
-  processName   String
-  orgUnit       String
-  executionDate String
-  operationType String   @default("اصلاح")
-  entityType    String?  @default("فرآیند")
-  assignee      String?
-  description   String
-  rawJson       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  images        ProcessImage[]
+  id               String   @id @default(cuid())
+  processName      String
+  orgUnit          String
+  executionDate    String
+  registrationDate String?
+  operationType    String   @default("اصلاح")
+  entityType       String?  @default("فرآیند")
+  assignee         String?
+  description      String
+  rawJson          String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  images           ProcessImage[]
 
   @@index([orgUnit])
   @@index([operationType])
   @@index([entityType])
   @@index([assignee])
+  @@index([registrationDate])
 }
 
 model ProcessImage {

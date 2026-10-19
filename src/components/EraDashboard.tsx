@@ -62,7 +62,8 @@ import {
   Download,
   UserCheck,
   User,
-  Users
+  Users,
+  Lock
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -132,6 +133,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       'processName',
       'entityType',
       'orgUnit',
+      'registrationDate',
       'executionDate',
       'operationType',
       'assignee',
@@ -590,6 +592,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         const mUnit = norm(item.orgUnit).includes(q);
         const mDesc = norm(item.description).includes(q);
         const mDate = item.executionDate.includes(q);
+        const mRegDate = (item.registrationDate || '').includes(q);
         const mEntity = norm(item.entityType || '').includes(q);
         const mOp = norm(item.operationType || '').includes(q);
         const mAssignee = norm(item.assignee || '').includes(q);
@@ -598,7 +601,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         const mSolution = norm(item.solutionDescription || '').includes(q);
         const mAchStr = Array.isArray(item.achievements) ? item.achievements.join(' ') : (item.achievements || '');
         const mAch = norm(mAchStr).includes(q);
-        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mAssignee && !mStatus && !mProblem && !mSolution && !mAch) return false;
+        if (!mName && !mUnit && !mDesc && !mDate && !mRegDate && !mEntity && !mOp && !mAssignee && !mStatus && !mProblem && !mSolution && !mAch) return false;
       }
       if (bpmnFilter === 'with-bpmn' && !item.hasBpmn && !item.bpmnXml) {
         return false;
@@ -709,6 +712,9 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           break;
         case 'orgUnit':
           comparison = (a.orgUnit || '').localeCompare(b.orgUnit || '', 'fa');
+          break;
+        case 'registrationDate':
+          comparison = (a.registrationDate || '').localeCompare(b.registrationDate || '');
           break;
         case 'executionDate':
           comparison = (a.executionDate || '').localeCompare(b.executionDate || '');
@@ -953,13 +959,14 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         const mUnit = norm(item.orgUnit).includes(q);
         const mDesc = norm(item.description).includes(q);
         const mDate = item.executionDate.includes(q);
+        const mRegDate = (item.registrationDate || '').includes(q);
         const mEntity = norm(item.entityType || '').includes(q);
         const mOp = norm(item.operationType || '').includes(q);
         const mProblem = norm(item.problemDescription || '').includes(q);
         const mSolution = norm(item.solutionDescription || '').includes(q);
         const mAchStr = Array.isArray(item.achievements) ? item.achievements.join(' ') : (item.achievements || '');
         const mAch = norm(mAchStr).includes(q);
-        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mProblem && !mSolution && !mAch) return false;
+        if (!mName && !mUnit && !mDesc && !mDate && !mRegDate && !mEntity && !mOp && !mProblem && !mSolution && !mAch) return false;
       }
       return true;
     });
@@ -2282,6 +2289,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                     </div>
                   </th>
                 )}
+                {isColVisible('registrationDate') && (
+                  <th
+                    onClick={() => handleSort('registrationDate' as any)}
+                    className="py-2.5 px-2 min-w-[110px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس تاریخ ثبت (سیستمی و غیرقابل تغییر)"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <Lock className="h-3 w-3 text-slate-500" />
+                      <span>تاریخ ثبت</span>
+                      {renderSortIndicator('registrationDate' as any)}
+                    </div>
+                  </th>
+                )}
                 {isColVisible('executionDate') && (
                   <th
                     className="py-2.5 px-2 min-w-[110px] text-center text-xs hover:bg-[#E2E2DC] transition group"
@@ -2478,6 +2498,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                         </option>
                       ))}
                     </select>
+                  </th>
+                )}
+
+                {/* 4.5. Registration Date (System Read-Only) */}
+                {isColVisible('registrationDate') && (
+                  <th className="p-1 font-normal text-center">
+                    <div 
+                      className="flex items-center justify-center gap-1 w-full bg-[#F5F4EF] border border-[#DDDBCF] rounded-lg px-1 py-1 text-[10px] text-slate-600 font-bold select-none"
+                      title="تاریخ اولین ثبت فرآیند در سامانه (سیستمی و غیرقابل تغییر)"
+                    >
+                      <Lock className="h-2.5 w-2.5 text-slate-400" />
+                      <span>سیستمی</span>
+                    </div>
                   </th>
                 )}
 
@@ -2960,6 +2993,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                         <td className="py-2.5 px-3">
                           <span className="bg-[#EFEFEA] text-[#2D2C28] font-semibold px-2 py-0.5 rounded-md border border-[#DDDBCF] text-[11px] block truncate" title={item.orgUnit}>
                             {item.orgUnit}
+                          </span>
+                        </td>
+                      )}
+
+                      {/* 4.5. Registration Date (سیستمی و غیرقابل تغییر) */}
+                      {isColVisible('registrationDate') && (
+                        <td className="py-2.5 px-2 text-center whitespace-nowrap">
+                          <span 
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 font-mono text-[11px] font-bold shadow-2xs select-none"
+                            title="تاریخ اولین ثبت فرآیند در سامانه (سیستمی و غیرقابل ویرایش)"
+                          >
+                            <Lock className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                            <span>{item.registrationDate || (item as any)["تاریخ ثبت"] || item.executionDate}</span>
                           </span>
                         </td>
                       )}

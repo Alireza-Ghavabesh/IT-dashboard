@@ -39,7 +39,8 @@ import {
   ExternalLink,
   Plus,
   XCircle,
-  Paperclip
+  Paperclip,
+  Lock
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import {
@@ -287,7 +288,7 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
   const handleCopySummary = () => {
     let text = `🎯 گزارش ارائه مدیریتی فرآیند: ${item.processName} (${item.orgUnit})\n`;
-    text += `📅 تاریخ اجرا: ${item.executionDate} | نوع اقدام: ${item.operationType}\n\n`;
+    text += `📅 تاریخ ثبت (سیستمی): ${item.registrationDate || (item as any)["تاریخ ثبت"] || item.executionDate} | تاریخ اجرا: ${item.executionDate} | نوع اقدام: ${item.operationType}\n\n`;
     text += `📌 خلاصه اجرایی:\n${presentation.summarySentence || item.description}\n\n`;
 
     const customAchievements = item.achievements
@@ -302,26 +303,18 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
       }
     }
 
-    if (isCreation) {
-      text += `🔴 وضعیت قبل از ایجاد فرم:\n${presentation.beforeDescription}\n`;
-      text += `چالش‌ها:\n` + (presentation.beforePainPoints?.map(p => ` - ${p}`).join('\n') || '') + '\n\n';
-      text += `🟢 وضعیت بعد از ایجاد فرم و مکانیزه‌سازی:\n${presentation.afterDescription}\n`;
-      const finalImprovements = achievementsList.length > 0 ? achievementsList : (presentation.afterImprovements || []);
-      text += `بهبودها و ارزش افزوده برای شرکت:\n` + (finalImprovements.map(p => ` - ${p}`).join('\n') || '') + '\n\n';
-      if (presentation.quantifiableImpact) {
-        text += `📊 نتایج کمی و قابل سنجش:\n`;
-        if (presentation.quantifiableImpact.timeReduction) text += ` • سرعت: ${presentation.quantifiableImpact.timeReduction}\n`;
-        if (presentation.quantifiableImpact.errorReduction) text += ` • دقت: ${presentation.quantifiableImpact.errorReduction}\n`;
-        if (presentation.quantifiableImpact.paperElimination) text += ` • کاغذ: ${presentation.quantifiableImpact.paperElimination}\n`;
-      }
-    } else {
-      text += `⚠️ مشکلات و چالش‌های اولیه فرآیند:\n` + (presentation.identifiedProblems?.map(p => ` - ${p}`).join('\n') || '') + '\n\n';
-      text += `🛠 راهکار و اصلاحات اعمال شده توسط IT:\n${presentation.solutionApplied}\n\n`;
-      const finalSolved = achievementsList.length > 0 ? achievementsList : (presentation.solvedOutcomes || []);
-      text += `✅ مشکلات حل شده و دستاوردها:\n` + (finalSolved.map(p => ` - ${p}`).join('\n') || '') + '\n\n';
-      if (presentation.preventedIssues) {
-        text += `🛡️ پیشگیری از خسارت/ریسک:\n${presentation.preventedIssues}\n`;
-      }
+    const customProblem = item.problemDescription?.trim();
+    const customSolution = item.solutionDescription?.trim();
+
+    if (customProblem) {
+      text += `🔴 ${isCreation ? 'وضعیت قبل از ایجاد فرم' : 'مشکلات و چالش‌های اولیه فرآیند'}:\n${customProblem}\n\n`;
+    }
+    if (customSolution) {
+      text += `🟢 ${isCreation ? 'وضعیت بعد از ایجاد فرم و مکانیزه‌سازی' : 'راهکار و اصلاحات اعمال شده'}:\n${customSolution}\n\n`;
+    }
+
+    if (achievementsList.length > 0) {
+      text += `✅ دستاوردهای ثبت‌شده فرآیند:\n` + achievementsList.map(p => ` - ${p}`).join('\n') + '\n\n';
     }
 
     navigator.clipboard.writeText(text);
@@ -413,6 +406,20 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
               <span className="flex items-center gap-1 font-bold text-[#2D2C28] bg-white px-2.5 py-1 rounded-lg border border-[#DDDBCF]">
                 <Building2 className="h-3.5 w-3.5 text-[#545D4B]" />
                 واحد: {item.orgUnit}
+              </span>
+              <span 
+                className="flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-xs shrink-0 font-mono shadow-2xs"
+                title="تاریخ اولین ثبت فرآیند در سامانه (سیستمی و غیرقابل تغییر)"
+              >
+                <Lock className="h-3 w-3 text-slate-500 shrink-0" />
+                <span>تاریخ ثبت: {item.registrationDate || (item as any)["تاریخ ثبت"] || item.executionDate}</span>
+              </span>
+              <span 
+                className="flex items-center gap-1 font-bold text-slate-700 bg-white px-2.5 py-1 rounded-lg border border-[#DDDBCF] text-xs shrink-0 font-mono"
+                title="تاریخ انجام عملیات فرآیندی"
+              >
+                <Calendar className="h-3.5 w-3.5 text-[#545D4B] shrink-0" />
+                <span>تاریخ اجرا: {item.executionDate}</span>
               </span>
               <span className={`flex items-center gap-1.5 font-bold px-2.5 py-1 rounded-lg border ${
                 isAuto
@@ -747,18 +754,19 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
                       <div className="bg-white/80 rounded-2xl p-3.5 border border-rose-200 text-xs text-rose-950 leading-relaxed font-medium">
                         <RichTextDisplay
-                          content={item.problemDescription?.trim() || presentation.beforeDescription}
+                          content={item.problemDescription?.trim() || ''}
+                          fallbackText="—"
                         />
                       </div>
 
-                      {/* Pain Points List */}
-                      {presentation.beforePainPoints && presentation.beforePainPoints.length > 0 && (
+                      {/* Pain Points List (تنها در صورت ثبت اختصاصی توسط کاربر) */}
+                      {Boolean(item.problemDescription?.trim() && presentation.beforePainPoints && presentation.beforePainPoints.length > 0) && (
                         <div className="space-y-2 pt-1">
                           <span className="text-xs font-black text-rose-900 block">
                             چالش‌ها و معایب فرآیند قبلی:
                           </span>
                           <ul className="space-y-1.5 text-xs text-rose-900">
-                            {presentation.beforePainPoints.map((point, idx) => (
+                            {presentation.beforePainPoints!.map((point, idx) => (
                               <li key={idx} className="flex items-start gap-2 bg-white/60 p-2 rounded-xl border border-rose-100">
                                 <span className="text-rose-600 font-black shrink-0 mt-0.5">✕</span>
                                 <span>{point}</span>
@@ -795,7 +803,8 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
                       <div className="bg-white/80 rounded-2xl p-3.5 border border-emerald-200 text-xs text-emerald-950 leading-relaxed font-medium">
                         <RichTextDisplay
-                          content={item.solutionDescription?.trim() || presentation.afterDescription}
+                          content={item.solutionDescription?.trim() || ''}
+                          fallbackText="—"
                         />
                       </div>
 
@@ -901,22 +910,12 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
                     <AlertTriangle className="h-5 w-5 text-amber-600" />
                   </div>
 
-                  {item.problemDescription?.trim() ? (
-                    <div className="bg-white/80 p-3 rounded-2xl border border-amber-200 text-amber-950 text-xs font-medium leading-relaxed">
-                      <RichTextDisplay content={item.problemDescription.trim()} />
-                    </div>
-                  ) : (
-                    <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                      {presentation.identifiedProblems?.map((prob, idx) => (
-                        <li key={idx} className="bg-white/80 p-3 rounded-2xl border border-amber-200/80 text-amber-950 flex items-start gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-[11px] shrink-0 mt-0.5">
-                            {idx + 1}
-                          </span>
-                          <span className="font-medium leading-relaxed">{prob}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div className="bg-white/80 p-3 rounded-2xl border border-amber-200 text-amber-950 text-xs font-medium leading-relaxed">
+                    <RichTextDisplay
+                      content={item.problemDescription?.trim() || ''}
+                      fallbackText="—"
+                    />
+                  </div>
                 </div>
 
                 {/* Step 2: Technical Solution Applied by IT */}
@@ -935,7 +934,8 @@ export const ProcessPresentationModal: React.FC<ProcessPresentationModalProps> =
 
                   <div className="bg-white/90 p-4 rounded-2xl border border-blue-200 text-xs text-blue-950 font-medium leading-relaxed">
                     <RichTextDisplay
-                      content={item.solutionDescription?.trim() || presentation.solutionApplied}
+                      content={item.solutionDescription?.trim() || ''}
+                      fallbackText="—"
                     />
                   </div>
                 </div>

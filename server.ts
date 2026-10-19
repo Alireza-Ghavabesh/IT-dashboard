@@ -4,7 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import { prisma, ensureDatabaseHealthy } from './server/db';
 import { seedDatabase } from './server/seed';
-import { extractOrgUnit, classifyLetterType, parsePersianDate, DEFAULT_CAUSE_RULES, DEFAULT_EXCLUSION_RULES, processRawEraItems, isDateInRange, processRawLetters } from './src/utils/parser';
+import { extractOrgUnit, classifyLetterType, parsePersianDate, DEFAULT_CAUSE_RULES, DEFAULT_EXCLUSION_RULES, processRawEraItems, isDateInRange, processRawLetters, formatToJalaliDate, getCurrentJalaliDate } from './src/utils/parser';
 
 // Helper to resolve Gemini API Key from database or process.env
 async function getResolvedApiKey(): Promise<{ apiKey: string; source: 'database' | 'env' | 'none' }> {
@@ -617,6 +617,8 @@ async function startServer() {
           orgUnit: item.orgUnit,
           "تاریخ انجام": item.executionDate,
           executionDate: item.executionDate,
+          "تاریخ ثبت": item.registrationDate || raw.registrationDate || raw["تاریخ ثبت"] || formatToJalaliDate(item.createdAt),
+          registrationDate: item.registrationDate || raw.registrationDate || raw["تاریخ ثبت"] || formatToJalaliDate(item.createdAt),
           "نوع عملیات": item.operationType || raw.operationType || raw["نوع عملیات"],
           operationType: item.operationType || raw.operationType || raw["نوع عملیات"],
           "نوع موجودیت": item.entityType || raw.entityType || raw["نوع موجودیت"] || 'فرآیند',
@@ -879,6 +881,7 @@ async function startServer() {
         const operationType = (rawItem.operationType || rawItem["نوع عملیات"] || parsed.operationType || 'اصلاح').toString().trim();
         const entityType = (rawItem.entityType || rawItem["نوع موجودیت"] || parsed.entityType || 'فرآیند').toString().trim();
         const assignee = (parsed.assignee || rawItem.assignee || rawItem["اقدام کننده"] || rawItem["اقدام‌کننده"] || '').trim() || null;
+        const registrationDate = (rawItem.registrationDate || rawItem["تاریخ ثبت"] || parsed.registrationDate || getCurrentJalaliDate().str).toString().trim();
         const description = parsed.description || '';
 
         const created = await prisma.eraProcess.create({
@@ -886,11 +889,12 @@ async function startServer() {
             processName,
             orgUnit,
             executionDate,
+            registrationDate,
             operationType,
             entityType,
             assignee,
             description,
-            rawJson: JSON.stringify({ ...rawItem, ...parsed, operationType, "نوع عملیات": operationType, entityType, "نوع موجودیت": entityType, assignee: assignee || undefined })
+            rawJson: JSON.stringify({ ...rawItem, ...parsed, registrationDate, "تاریخ ثبت": registrationDate, operationType, "نوع عملیات": operationType, entityType, "نوع موجودیت": entityType, assignee: assignee || undefined })
           }
         });
 
@@ -956,7 +960,18 @@ async function startServer() {
         const opTypeVal = (body.operationType || body["نوع عملیات"] || parsed.operationType || target.operationType || 'اصلاح').toString().trim();
         const entityTypeVal = (body.entityType || body["نوع موجودیت"] || parsed.entityType || target.entityType || 'فرآیند').toString().trim();
 
-        const mergedRaw = {
+        // Check whether assignee was explicitly passed in payload (even if empty string or null to unassign)
+        let assigneeVal: string | null;
+        if ('assignee' in body || 'اقدام کننده' in body || 'اقدام‌کننده' in body) {
+          const rawA = body.assignee !== undefined ? body.assignee : (body['اقدام کننده'] !== undefined ? body['اقدام کننده'] : body['اقدام‌کننده']);
+          assigneeVal = (typeof rawA === 'string' && rawA.trim().length > 0) ? rawA.trim() : null;
+        } else if (parsed.assignee !== undefined) {
+          assigneeVal = (typeof parsed.assignee === 'string' && parsed.assignee.trim().length > 0) ? parsed.assignee.trim() : null;
+        } else {
+          assigneeVal = target.assignee || null;
+        }
+
+        const mergedRaw: any = {
           ...existingRaw,
           ...body,
           ...parsed,
@@ -964,14 +979,24 @@ async function startServer() {
           "نوع عملیات": opTypeVal,
           entityType: entityTypeVal,
           "نوع موجودیت": entityTypeVal,
+          assignee: assigneeVal || undefined,
+          "اقدام کننده": assigneeVal || undefined,
+          "اقدام‌کننده": assigneeVal || undefined,
           isSelectedForSlide: body.isSelectedForSlide !== undefined 
             ? Boolean(body.isSelectedForSlide) 
             : (existingRaw.isSelectedForSlide !== undefined ? Boolean(existingRaw.isSelectedForSlide) : false)
         };
 
-        const assigneeVal = parsed.assignee !== undefined
-          ? ((parsed.assignee || '').trim() || null)
-          : (target.assignee || null);
+        if (!assigneeVal) {
+          delete mergedRaw.assignee;
+          delete mergedRaw["اقدام کننده"];
+          delete mergedRaw["اقدام‌کننده"];
+        }
+
+        // Registration date is fixed upon initial creation and CANNOT be edited on subsequent updates
+        const fixedRegDate = target.registrationDate || existingRaw.registrationDate || existingRaw["تاریخ ثبت"] || formatToJalaliDate(target.createdAt);
+        mergedRaw.registrationDate = fixedRegDate;
+        mergedRaw["تاریخ ثبت"] = fixedRegDate;
 
         updated = await prisma.eraProcess.update({
           where: { id: target.id },
@@ -979,28 +1004,62 @@ async function startServer() {
             processName: parsed.processName || target.processName,
             orgUnit: parsed.orgUnit || target.orgUnit,
             executionDate: parsed.executionDate || target.executionDate,
+            registrationDate: fixedRegDate,
             operationType: opTypeVal,
             entityType: entityTypeVal,
             assignee: assigneeVal,
             description: parsed.description !== undefined ? parsed.description : target.description,
-            rawJson: JSON.stringify({ ...mergedRaw, operationType: opTypeVal, "نوع عملیات": opTypeVal, entityType: entityTypeVal, "نوع موجودیت": entityTypeVal, assignee: assigneeVal || undefined })
+            rawJson: JSON.stringify(mergedRaw)
           }
         });
+
+        // Auto-sync assignee to era_assignees setting in DB if a valid name was set
+        if (assigneeVal) {
+          try {
+            const currentSetting = await prisma.appSetting.findUnique({ where: { key: 'era_assignees' } });
+            let list: string[] = [];
+            if (currentSetting?.value) {
+              try {
+                const pList = JSON.parse(currentSetting.value);
+                if (Array.isArray(pList)) list = pList;
+              } catch {}
+            }
+            if (!list.includes(assigneeVal)) {
+              list.push(assigneeVal);
+              await prisma.appSetting.upsert({
+                where: { key: 'era_assignees' },
+                create: { key: 'era_assignees', value: JSON.stringify(list) },
+                update: { value: JSON.stringify(list) }
+              });
+            }
+          } catch {}
+        }
       } else {
         // Create if does not exist (upsert)
         const opTypeVal = (body.operationType || body["نوع عملیات"] || parsed.operationType || 'اصلاح').toString().trim();
         const entityTypeVal = (body.entityType || body["نوع موجودیت"] || parsed.entityType || 'فرآیند').toString().trim();
-        const assigneeVal = (parsed.assignee || body.assignee || '').trim() || null;
-        const newRaw = {
+        const rawA = body.assignee !== undefined ? body.assignee : (body['اقدام کننده'] !== undefined ? body['اقدام کننده'] : (body['اقدام‌کننده'] || parsed.assignee));
+        const assigneeVal = (typeof rawA === 'string' && rawA.trim().length > 0) ? rawA.trim() : null;
+        const regDateVal = (body.registrationDate || body["تاریخ ثبت"] || parsed.registrationDate || getCurrentJalaliDate().str).toString().trim();
+        const newRaw: any = {
           ...body,
           ...parsed,
           operationType: opTypeVal,
           "نوع عملیات": opTypeVal,
           entityType: entityTypeVal,
           "نوع موجودیت": entityTypeVal,
+          registrationDate: regDateVal,
+          "تاریخ ثبت": regDateVal,
           assignee: assigneeVal || undefined,
+          "اقدام کننده": assigneeVal || undefined,
+          "اقدام‌کننده": assigneeVal || undefined,
           isSelectedForSlide: body.isSelectedForSlide !== undefined ? Boolean(body.isSelectedForSlide) : false
         };
+        if (!assigneeVal) {
+          delete newRaw.assignee;
+          delete newRaw["اقدام کننده"];
+          delete newRaw["اقدام‌کننده"];
+        }
 
         updated = await prisma.eraProcess.create({
           data: {
@@ -1008,6 +1067,7 @@ async function startServer() {
             processName: parsed.processName || 'فرآیند جدید',
             orgUnit: parsed.orgUnit || 'نامشخص',
             executionDate: parsed.executionDate || '1405/01/01',
+            registrationDate: regDateVal,
             operationType: opTypeVal,
             entityType: entityTypeVal,
             assignee: assigneeVal,
@@ -1744,47 +1804,6 @@ async function startServer() {
     }
   });
 
-  // GET /api/settings/:key
-  app.get('/api/settings/:key', async (req: Request, res: Response) => {
-    try {
-      const { key } = req.params;
-      const setting = await prisma.appSetting.findUnique({
-        where: { key }
-      });
-      if (!setting) {
-        return res.status(404).json({ success: false, error: 'Setting not found' });
-      }
-      let parsedValue = setting.value;
-      try {
-        parsedValue = JSON.parse(setting.value);
-      } catch {}
-      res.json({ success: true, key: setting.key, value: parsedValue });
-    } catch (error: any) {
-      console.error('Error fetching setting:', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
-
-  // POST or PUT /api/settings/:key
-  app.post('/api/settings/:key', async (req: Request, res: Response) => {
-    try {
-      const { key } = req.params;
-      const { value } = req.body;
-      const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-
-      const updated = await prisma.appSetting.upsert({
-        where: { key },
-        update: { value: stringValue },
-        create: { key, value: stringValue }
-      });
-
-      res.json({ success: true, key: updated.key, value });
-    } catch (error: any) {
-      console.error('Error saving setting:', error);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
-
   // ----------------------------------------------------
   // REST API: Assignees Management (مدیریت اقدام‌کنندگان فرآیندها در دیتابیس)
   // ----------------------------------------------------
@@ -1865,6 +1884,47 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error('Error saving assignees to DB:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // GET /api/settings/:key
+  app.get('/api/settings/:key', async (req: Request, res: Response) => {
+    try {
+      const { key } = req.params;
+      const setting = await prisma.appSetting.findUnique({
+        where: { key }
+      });
+      if (!setting) {
+        return res.status(404).json({ success: false, error: 'Setting not found' });
+      }
+      let parsedValue = setting.value;
+      try {
+        parsedValue = JSON.parse(setting.value);
+      } catch {}
+      res.json({ success: true, key: setting.key, value: parsedValue });
+    } catch (error: any) {
+      console.error('Error fetching setting:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // POST or PUT /api/settings/:key
+  app.post('/api/settings/:key', async (req: Request, res: Response) => {
+    try {
+      const { key } = req.params;
+      const { value } = req.body;
+      const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+
+      const updated = await prisma.appSetting.upsert({
+        where: { key },
+        update: { value: stringValue },
+        create: { key, value: stringValue }
+      });
+
+      res.json({ success: true, key: updated.key, value });
+    } catch (error: any) {
+      console.error('Error saving setting:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
@@ -2071,18 +2131,61 @@ async function startServer() {
       // Insert Era Processes
       let insertedEraCount = 0;
       if (eraProcesses.length > 0) {
-        const eraRecords = eraProcesses.map((e: any) => ({
-          id: e.id || undefined,
-          processName: e.processName || e['نام فرایند'] || e['نام فرآیند'] || 'فرآیند سازمانی',
-          orgUnit: e.orgUnit || e['واحد سازمانی'] || 'نامشخص',
-          executionDate: e.executionDate || e['تاریخ انجام'] || '1405/01/01',
-          operationType: e.operationType || e['نوع عملیات'] || 'اصلاح',
-          entityType: e.entityType || e['نوع موجودیت'] || 'فرآیند',
-          description: e.description || e['توضیحات'] || '',
-          rawJson: typeof e.rawJson === 'string' ? e.rawJson : JSON.stringify(e)
-        }));
+        const eraRecords = eraProcesses.map((e: any) => {
+          let aVal: string | null = null;
+          if (typeof e.assignee === 'string' && e.assignee.trim()) {
+            aVal = e.assignee.trim();
+          } else if (typeof e['اقدام کننده'] === 'string' && e['اقدام کننده'].trim()) {
+            aVal = e['اقدام کننده'].trim();
+          } else if (typeof e['اقدام‌کننده'] === 'string' && e['اقدام‌کننده'].trim()) {
+            aVal = e['اقدام‌کننده'].trim();
+          } else if (e.rawJson) {
+            try {
+              const pj = JSON.parse(e.rawJson);
+              if (pj.assignee) aVal = String(pj.assignee).trim();
+              else if (pj['اقدام کننده']) aVal = String(pj['اقدام کننده']).trim();
+              else if (pj['اقدام‌کننده']) aVal = String(pj['اقدام‌کننده']).trim();
+            } catch {}
+          }
+          const regDate = (e.registrationDate || e['تاریخ ثبت'] || e['تاریخ_ثبت'] || (e.createdAt ? formatToJalaliDate(e.createdAt) : null) || null);
+          return {
+            id: e.id || undefined,
+            processName: e.processName || e['نام فرایند'] || e['نام فرآیند'] || 'فرآیند سازمانی',
+            orgUnit: e.orgUnit || e['واحد سازمانی'] || 'نامشخص',
+            executionDate: e.executionDate || e['تاریخ انجام'] || '1405/01/01',
+            registrationDate: regDate,
+            operationType: e.operationType || e['نوع عملیات'] || 'اصلاح',
+            entityType: e.entityType || e['نوع موجودیت'] || 'فرآیند',
+            assignee: aVal,
+            description: e.description || e['توضیحات'] || '',
+            rawJson: typeof e.rawJson === 'string' ? e.rawJson : JSON.stringify({ ...e, registrationDate: regDate, "تاریخ ثبت": regDate })
+          };
+        });
         await prisma.eraProcess.createMany({ data: eraRecords });
         insertedEraCount = eraRecords.length;
+
+        // Auto-merge any assignees found in restored processes into era_assignees appSetting
+        const foundAssignees = eraRecords
+          .map((r: any) => r.assignee)
+          .filter((a: any): a is string => Boolean(a && typeof a === 'string' && a.trim().length > 0));
+        if (foundAssignees.length > 0) {
+          try {
+            const currentSetting = await prisma.appSetting.findUnique({ where: { key: 'era_assignees' } });
+            let currentList: string[] = [];
+            if (currentSetting?.value) {
+              try {
+                const parsed = JSON.parse(currentSetting.value);
+                if (Array.isArray(parsed)) currentList = parsed;
+              } catch {}
+            }
+            const combined = Array.from(new Set([...currentList, ...foundAssignees]));
+            await prisma.appSetting.upsert({
+              where: { key: 'era_assignees' },
+              create: { key: 'era_assignees', value: JSON.stringify(combined) },
+              update: { value: JSON.stringify(combined) }
+            });
+          } catch {}
+        }
       }
 
       // Insert Process Images
