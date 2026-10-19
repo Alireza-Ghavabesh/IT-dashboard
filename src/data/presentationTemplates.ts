@@ -184,8 +184,13 @@ export function getProcessPresentation(
     return PRESET_PROCESS_PRESENTATIONS[matchedKey];
   }
 
-  const isAutomation = operationType === 'اتوماتیک‌سازی' || operationType === 'اتوماتیک سازی' || operationType.includes('اتوماتیک') || operationType.includes('اوتوماتیک') || description.includes('اتوماتیک') || description.includes('خودکار');
-  const isNew = operationType === 'جدید' || description.includes('ایجاد') || description.includes('ساخت');
+  const hasExplicitOp = Boolean(operationType && operationType.trim());
+  const isAutomation = hasExplicitOp
+    ? (operationType === 'اتوماتیک‌سازی' || operationType === 'اتوماتیک سازی' || operationType.includes('اتوماتیک') || operationType.includes('اوتوماتیک') || operationType.includes('اتوماسیون'))
+    : (description.includes('اتوماتیک') || description.includes('خودکار') || description.includes('اتوماسیون'));
+  const isNew = hasExplicitOp
+    ? (operationType === 'جدید' || operationType.includes('جدید') || operationType.includes('ایجاد'))
+    : (description.includes('ایجاد') || description.includes('ساخت') || processName.includes('ایجاد'));
 
   if (isAutomation) {
     return {
@@ -240,9 +245,9 @@ export function getProcessPresentation(
       category: 'process_fix',
       summarySentence: `اصلاح زیرساخت، رفع گلوگاه و بهبود گردش‌کار «${processName}» در واحد ${orgUnit}`,
       identifiedProblems: [
-        `وجود باگ، محدودیت یا ناهماهنگی در فرآیند قبلی: ${description || 'نیاز به اصلاح ساختار و دسترسی‌ها'}`,
-        'کندی یا ایجاد وقفه در عملیات روزمره کاربران واحد مربوطه',
-        'عدم پوشش کامل نیازمندی‌های جدید کسب‌وکار و گزارش‌گیری'
+        'وجود محدودیت ساختاری، کندی گردش‌کار یا خطای فرآیندی در نسخه قبلی',
+        'ایجاد وقفه و دشواری در پیگیری دقیق امور توسط پرسنل و مدیران ذینفع',
+        'عدم پوشش کامل نیازمندی‌های سازمانی و نبود گزارش‌های تحلیلی استاندارد'
       ],
       solutionApplied: `تیم فناوری اطلاعات با بررسی دقیق نیازمندی، فرآیند را بازمهندسی کرده و تغییرات زیر را با موفقیت اعمال نمود: ${description}`,
       solvedOutcomes: [

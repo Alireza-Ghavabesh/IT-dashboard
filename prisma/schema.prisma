@@ -38,6 +38,7 @@ model EraProcess {
   executionDate String
   operationType String   @default("اصلاح")
   entityType    String?  @default("فرآیند")
+  assignee      String?
   description   String
   rawJson       String?
   createdAt     DateTime @default(now())
@@ -47,6 +48,7 @@ model EraProcess {
   @@index([orgUnit])
   @@index([operationType])
   @@index([entityType])
+  @@index([assignee])
 }
 
 model ProcessImage {

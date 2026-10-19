@@ -44,10 +44,11 @@ export default function App() {
   const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
   const [slideEditingItem, setSlideEditingItem] = useState<ProcessedEraItem | null>(null);
   const [bpmnEditingItem, setBpmnEditingItem] = useState<ProcessedEraItem | null>(null);
-  const [settingsTab, setSettingsTab] = useState<'exclusions' | 'causes' | 'system' | 'backup'>('causes');
+  const [settingsTab, setSettingsTab] = useState<'exclusions' | 'causes' | 'assignees' | 'system' | 'backup'>('causes');
+  const [assigneesList, setAssigneesList] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
 
-  const handleOpenSettings = (tab: 'exclusions' | 'causes' | 'system' | 'backup' = 'causes') => {
+  const handleOpenSettings = (tab: 'exclusions' | 'causes' | 'assignees' | 'system' | 'backup' = 'causes') => {
     setSettingsTab(tab);
     setIsSettingsModalOpen(true);
   };
@@ -203,6 +204,7 @@ export default function App() {
         orgUnit: val,
         executionDate: val,
         operationType: val,
+        assignee: val,
         status: val,
         noteFile: val,
         description: val,
@@ -334,15 +336,20 @@ export default function App() {
   const loadDatabaseData = useCallback(async (showSyncToast = false) => {
     try {
       setIsSyncing(true);
-      const [letters, era, fetchedRules, fetchedExclusions, settings, health, ticketsData] = await Promise.all([
+      const [letters, era, fetchedRules, fetchedExclusions, settings, health, ticketsData, assigneesData] = await Promise.all([
         api.getLetters(),
         api.getEraItems(),
         api.getRules().catch(() => []),
         api.getExclusions().catch(() => []),
         api.getSettings().catch(() => ({})),
         api.getHealth().catch(() => null),
-        api.getTickets().catch(() => ({ tickets: [], totalRows: 0, lastSyncTime: null, config: null }))
+        api.getTickets().catch(() => ({ tickets: [], totalRows: 0, lastSyncTime: null, config: null })),
+        api.getAssignees().catch(() => ({ assignees: [] }))
       ]);
+
+      if (assigneesData && Array.isArray(assigneesData.assignees)) {
+        setAssigneesList(assigneesData.assignees);
+      }
 
       if (ticketsData) {
         setRawTickets(ticketsData.tickets || []);
@@ -1039,6 +1046,9 @@ export default function App() {
         status: item.status || 'برای انجام',
         "دلیل رد": item.rejectionReason,
         rejectionReason: item.rejectionReason,
+        "اقدام کننده": item.assignee,
+        "اقدام‌کننده": item.assignee,
+        assignee: item.assignee,
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -1073,6 +1083,9 @@ export default function App() {
         status: item.status || 'برای انجام',
         "دلیل رد": item.rejectionReason,
         rejectionReason: item.rejectionReason,
+        "اقدام کننده": item.assignee,
+        "اقدام‌کننده": item.assignee,
+        assignee: item.assignee,
         "توضیحات": item.description || '',
         description: item.description || '',
         problemDescription: item.problemDescription,
@@ -1112,6 +1125,7 @@ export default function App() {
           const updatedOpType = item.operationType !== undefined ? item.operationType : (p.operationType || p["نوع عملیات"] || 'اصلاح');
           const updatedEntityType = item.entityType !== undefined ? item.entityType : (p.entityType || p["نوع موجودیت"] || 'فرآیند');
           const updatedStatus = item.status !== undefined ? item.status : (p.status || p["وضعیت"] || 'انجام شده');
+          const updatedAssignee = item.assignee !== undefined ? (item.assignee || undefined) : (p.assignee || p["اقدام کننده"] || p["اقدام‌کننده"]);
           const updatedDesc = item.description !== undefined ? item.description : (p.description || p["توضیحات"] || '');
 
           return {
@@ -1132,6 +1146,9 @@ export default function App() {
             status: updatedStatus,
             "دلیل رد": item.rejectionReason !== undefined ? item.rejectionReason : (item.status === 'رد شده' ? (p.rejectionReason || p["دلیل رد"]) : undefined),
             rejectionReason: item.rejectionReason !== undefined ? item.rejectionReason : (item.status === 'رد شده' ? (p.rejectionReason || p["دلیل رد"]) : undefined),
+            "اقدام کننده": updatedAssignee,
+            "اقدام‌کننده": updatedAssignee,
+            assignee: updatedAssignee,
             "توضیحات": updatedDesc,
             description: updatedDesc,
             isSelectedForSlide: item.isSelectedForSlide !== undefined ? item.isSelectedForSlide : p.isSelectedForSlide,
@@ -1175,9 +1192,11 @@ export default function App() {
     }
 
     try {
-      if (item.id && !item.id.startsWith('era-')) {
-        await api.updateEraItem(item.id, item);
+      const targetDbId = (item as any)._dbId || item.id;
+      if (targetDbId) {
+        await api.updateEraItem(targetDbId, item);
       }
+      await loadDatabaseData(false);
       showToast(`فرآیند "${item.processName || ''}" با موفقیت به‌روزرسانی شد.`);
     } catch (err: any) {
       console.warn('REST API update note:', err);
@@ -1350,6 +1369,8 @@ export default function App() {
             onSetAllEraColumnsVisibility={handleSetAllEraColumnsVisibility}
             onResetEraColumnsVisibility={handleResetEraColumnsVisibility}
             onOpenSettingsModal={() => handleOpenSettings('system')}
+            onOpenSettingsAssignees={() => handleOpenSettings('assignees')}
+            assigneesList={assigneesList}
             onOpenGeneralAiChat={() => setIsAiModalOpen(true)}
           />
         ) : activeTab === 'tickets' ? (
@@ -1404,6 +1425,8 @@ export default function App() {
           }}
           initialItem={slideEditingItem}
           existingUnits={Array.from(allOrganizationalUnits)}
+          assigneesList={assigneesList}
+          onOpenSettingsAssignees={() => handleOpenSettings('assignees')}
           maxFileSizeMb={eraVisibility?.maxNoteFileSizeMb ?? 10}
           onOpenBpmnDesigner={(item) => {
             setSlideEditingItem(null);
@@ -1475,6 +1498,7 @@ export default function App() {
           await loadDatabaseData(true);
           showToast('اطلاعات با موفقیت از فایل پشتیبان بازیابی و بارگذاری شدند.');
         }}
+        onAssigneesUpdated={(updated) => setAssigneesList(updated)}
       />
 
       {/* Gemini AI BI Assistant & Intelligence Chat Modal */}

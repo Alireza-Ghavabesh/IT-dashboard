@@ -4,6 +4,7 @@ export interface EraQueryParams {
   unit?: string;
   opType?: string;
   entityType?: string;
+  assignee?: string;
   status?: string;
   search?: string;
   startDate?: string;
@@ -166,6 +167,7 @@ export const api = {
     if (params.unit && params.unit !== 'all') url.searchParams.set('unit', params.unit);
     if (params.opType && params.opType !== 'all') url.searchParams.set('opType', params.opType);
     if (params.entityType && params.entityType !== 'all') url.searchParams.set('entityType', params.entityType);
+    if (params.assignee && params.assignee !== 'all') url.searchParams.set('assignee', params.assignee);
     if (params.status && params.status !== 'all') url.searchParams.set('status', params.status);
     if (params.search) url.searchParams.set('search', params.search);
     if (params.startDate) url.searchParams.set('startDate', params.startDate);
@@ -779,6 +781,36 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `خطا در دریافت تیکت‌ها (HTTP ${res.status})`);
+    }
+    return res.json();
+  },
+
+  // ----------------------------------------------------
+  // Process Assignees Management (مدیریت اقدام‌کنندگان در دیتابیس)
+  // ----------------------------------------------------
+  async getAssignees(): Promise<{
+    success: boolean;
+    assignees: string[];
+    counts?: Record<string, number>;
+    totalAssigned?: number;
+  }> {
+    const res = await fetch('/api/settings/assignees');
+    if (!res.ok) throw new Error('خطا در دریافت لیست اقدام‌کنندگان از دیتابیس');
+    return res.json();
+  },
+
+  async saveAssignees(assignees: string[]): Promise<{
+    success: boolean;
+    assignees: string[];
+  }> {
+    const res = await fetch('/api/settings/assignees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignees })
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'خطا در ذخیره لیست اقدام‌کنندگان در دیتابیس');
     }
     return res.json();
   }

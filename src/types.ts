@@ -158,6 +158,9 @@ export interface RawEraItem {
   status?: EraProcessStatus;
   "دلیل رد"?: string;
   rejectionReason?: string;
+  "اقدام کننده"?: string;
+  "اقدام‌کننده"?: string;
+  assignee?: string;
   "فایل یادداشت"?: EraNoteFile | null;
   noteFile?: EraNoteFile | null;
   توضیحات: string;
@@ -190,6 +193,7 @@ export interface ProcessedEraItem {
   monthName: string;
   operationType: EraOperationType;
   entityType?: EraEntityType;
+  assignee?: string; // اقدام‌کننده مسئول انجام فرآیند
   status?: EraProcessStatus;
   rejectionReason?: string;
   noteFile?: EraNoteFile | null; // فایل یادداشت پیوست فرآیند (pdf, xlsx, rar, zip)
@@ -266,6 +270,7 @@ export interface EraColumnVisibility {
   orgUnit: boolean;         // واحد سازمانی
   executionDate: boolean;   // تاریخ انجام
   operationType: boolean;   // نوع عملیات
+  assignee: boolean;        // اقدام‌کننده مسئول فرآیند
   status: boolean;          // وضعیت
   noteFile: boolean;        // فایل یادداشت پیوست
   description: boolean;     // توضیحات و شرح تغییرات
@@ -282,6 +287,7 @@ export const DEFAULT_ERA_COLUMN_VISIBILITY: EraColumnVisibility = {
   orgUnit: true,
   executionDate: true,
   operationType: true,
+  assignee: true,
   status: true,
   noteFile: true,
   description: true,

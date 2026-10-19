@@ -20,7 +20,8 @@ import {
   ChevronDown,
   TrendingUp,
   CheckCircle2,
-  XCircle
+  XCircle,
+  UserCheck
 } from 'lucide-react';
 import { ProcessedEraItem } from '../types';
 import { getCurrentJalaliDate, formatNumber, isDateInRange, stripHtmlToPlainText } from '../utils/parser';
@@ -52,11 +53,12 @@ export function getEffectiveProblemText(item: ProcessedEraItem): string {
   // ۴. خواندن از الگوی پرزنتیشن استاندارد (همان متن ستون قرمز "قبل از ایجاد" یا "مشکلات شناسایی‌شده")
   if (!prob) {
     try {
+      // ارسال رشته خالی برای description تا الگوی استاندارد چالش/ستون قرمز استفاده شود و متن توضیحات در چالش تکرار نشود
       const pres = getProcessPresentation(
         item.processName,
         item.orgUnit,
         item.operationType,
-        item.description || ''
+        ''
       );
       if (pres) {
         const isCreation = item.operationType === 'ایجاد' || item.operationType === 'جدید' || item.operationType === 'اتوماتیک‌سازی';
@@ -160,6 +162,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
   const [includeDetails, setIncludeDetails] = useState<boolean>(true); // include challenge & solution
   const [includeDateInItem, setIncludeDateInItem] = useState<boolean>(false);
   const [includeUnitInItem, setIncludeUnitInItem] = useState<boolean>(true);
+  const [includeAssigneeInItem, setIncludeAssigneeInItem] = useState<boolean>(true);
 
   // --- FILTERS (عین فهرست فرآیندها) ---
   const [searchFilter, setSearchFilter] = useState<string>('');
@@ -167,6 +170,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
   const [selectedOpType, setSelectedOpType] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedEntityType, setSelectedEntityType] = useState<string>('all');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState<boolean>(false);
@@ -185,6 +189,15 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
     items.forEach(it => {
       const et = it.entityType || 'فرآیند';
       set.add(et.trim());
+    });
+    return Array.from(set).sort();
+  }, [items]);
+
+  const allAssignees = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach(it => {
+      const a = (it.assignee || (it as any)['اقدام کننده'] || (it as any)['اقدام‌کننده'] || '').trim();
+      if (a) set.add(a);
     });
     return Array.from(set).sort();
   }, [items]);
@@ -210,9 +223,10 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
     if (selectedOpType !== 'all') count++;
     if (selectedStatus !== 'all') count++;
     if (selectedEntityType !== 'all') count++;
+    if (selectedAssignee !== 'all') count++;
     if (startDate.trim() || endDate.trim()) count++;
     return count;
-  }, [searchFilter, selectedUnit, selectedOpType, selectedStatus, selectedEntityType, startDate, endDate]);
+  }, [searchFilter, selectedUnit, selectedOpType, selectedStatus, selectedEntityType, selectedAssignee, startDate, endDate]);
 
   const handleResetFilters = () => {
     setSearchFilter('');
@@ -220,6 +234,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
     setSelectedOpType('all');
     setSelectedStatus('all');
     setSelectedEntityType('all');
+    setSelectedAssignee('all');
     setStartDate('');
     setEndDate('');
   };
@@ -234,9 +249,10 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         const mUnit = (it.orgUnit || '').toLowerCase().includes(q);
         const mDate = (it.executionDate || '').includes(q);
         const mDesc = (it.description || '').toLowerCase().includes(q);
+        const mAssignee = ((it.assignee || '') + ' ' + ((it as any)['اقدام کننده'] || '')).toLowerCase().includes(q);
         const mProb = (getEffectiveProblemText(it) || '').toLowerCase().includes(q);
         const mSol = (getEffectiveSolutionText(it) || '').toLowerCase().includes(q);
-        if (!mName && !mUnit && !mDate && !mDesc && !mProb && !mSol) return false;
+        if (!mName && !mUnit && !mDate && !mDesc && !mProb && !mSol && !mAssignee) return false;
       }
 
       // 2. Unit filter
@@ -257,7 +273,17 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         if (et !== selectedEntityType) return false;
       }
 
-      // 6. Date Range filter
+      // 6. Assignee filter
+      if (selectedAssignee !== 'all') {
+        const itAssignee = (it.assignee || (it as any)['اقدام کننده'] || (it as any)['اقدام‌کننده'] || '').trim();
+        if (selectedAssignee === 'none') {
+          if (itAssignee) return false;
+        } else {
+          if (itAssignee !== selectedAssignee) return false;
+        }
+      }
+
+      // 7. Date Range filter
       if (startDate.trim() || endDate.trim()) {
         if (!isDateInRange(it.executionDate, startDate.trim(), endDate.trim())) {
           return false;
@@ -266,7 +292,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
 
       return true;
     });
-  }, [items, searchFilter, selectedUnit, selectedOpType, selectedStatus, selectedEntityType, startDate, endDate]);
+  }, [items, searchFilter, selectedUnit, selectedOpType, selectedStatus, selectedEntityType, selectedAssignee, startDate, endDate]);
 
   // Initialize selection with items matching today or all completed items
   useEffect(() => {
@@ -353,6 +379,13 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
         }
       }
 
+      if (includeAssigneeInItem && item.assignee && item.assignee.trim()) {
+        const cleanAssignee = stripHtmlToPlainText(item.assignee);
+        if (cleanAssignee) {
+          text += `اقدام‌کننده: ${cleanAssignee}\n`;
+        }
+      }
+
       // Problem description (شرح چالش - دقیقاً از ستون قرمز مشکل و چالش شناسایی‌شده)
       if (includeDetails) {
         const cleanChallenge = getEffectiveProblemText(item);
@@ -386,7 +419,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
     });
 
     return text.trim();
-  }, [selectedItemsList, reportDayName, reportDate, includeUnitInItem, includeDateInItem, includeDetails]);
+  }, [selectedItemsList, reportDayName, reportDate, includeUnitInItem, includeDateInItem, includeAssigneeInItem, includeDetails]);
 
   // Copy to clipboard
   const handleCopyReport = async () => {
@@ -518,6 +551,15 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
               />
               <span>ذکر تاریخ فرآیند</span>
             </label>
+            <label className="flex items-center gap-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={includeAssigneeInItem}
+                onChange={e => setIncludeAssigneeInItem(e.target.checked)}
+                className="rounded accent-[#545D4B] cursor-pointer"
+              />
+              <span>ذکر اقدام‌کننده</span>
+            </label>
           </div>
         </div>
 
@@ -634,7 +676,7 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
 
               {/* Advanced Filter Collapsible Area (عین فهرست) */}
               {showAdvancedFilters && (
-                <div className="pt-2 border-t border-[#E8E6DF] grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs animate-in fade-in duration-150">
+                <div className="pt-2 border-t border-[#E8E6DF] grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs animate-in fade-in duration-150">
                   {/* Unit Filter */}
                   <div>
                     <label className="block text-[10px] font-bold text-[#75746E] mb-0.5">واحد سازمانی:</label>
@@ -680,8 +722,24 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
                     </select>
                   </div>
 
-                  {/* Date Filter Range */}
+                  {/* Assignee Filter */}
                   <div>
+                    <label className="block text-[10px] font-bold text-[#75746E] mb-0.5">اقدام‌کننده:</label>
+                    <select
+                      value={selectedAssignee}
+                      onChange={e => setSelectedAssignee(e.target.value)}
+                      className="w-full bg-[#FAFAF7] border border-[#DDDBCF] rounded-lg px-2 py-1 text-[11px] text-[#2D2C28] font-medium focus:outline-none"
+                    >
+                      <option value="all">همه اقدام‌کنندگان</option>
+                      <option value="none">بدون اقدام‌کننده</option>
+                      {allAssignees.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Date Filter Range */}
+                  <div className="col-span-2 sm:col-span-1">
                     <label className="block text-[10px] font-bold text-[#75746E] mb-0.5">فیلتر تاریخ (از / تا):</label>
                     <div className="flex items-center gap-1">
                       <input
@@ -813,6 +871,12 @@ export const QuickReportModal: React.FC<QuickReportModalProps> = ({
                           {item.entityType && (
                             <span className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-200 font-medium">
                               {item.entityType}
+                            </span>
+                          )}
+                          {item.assignee && (
+                            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-300 font-bold">
+                              <UserCheck className="w-2.5 h-2.5 text-emerald-700 shrink-0" />
+                              <span>{item.assignee}</span>
                             </span>
                           )}
                         </div>

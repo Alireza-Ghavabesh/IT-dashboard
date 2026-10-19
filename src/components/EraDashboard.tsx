@@ -59,7 +59,10 @@ import {
   FileText,
   FileArchive,
   FileSpreadsheet,
-  Download
+  Download,
+  UserCheck,
+  User,
+  Users
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -91,6 +94,8 @@ interface EraDashboardProps {
   onSetAllEraColumnsVisibility?: (val: boolean) => void;
   onResetEraColumnsVisibility?: () => void;
   onOpenSettingsModal?: () => void;
+  onOpenSettingsAssignees?: () => void;
+  assigneesList?: string[];
   onOpenGeneralAiChat?: (initialQuestion?: string) => void;
 }
 
@@ -112,6 +117,8 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   onSetAllEraColumnsVisibility,
   onResetEraColumnsVisibility,
   onOpenSettingsModal,
+  onOpenSettingsAssignees,
+  assigneesList = [],
   onOpenGeneralAiChat
 }) => {
   const isColVisible = (colKey: keyof EraColumnVisibility) => {
@@ -127,6 +134,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       'orgUnit',
       'executionDate',
       'operationType',
+      'assignee',
       'status',
       'noteFile',
       'description',
@@ -140,6 +148,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   const [selectedUnit, setSelectedUnit] = useState<string>('all');
   const [selectedOpType, setSelectedOpType] = useState<string>('all');
   const [selectedEntityType, setSelectedEntityType] = useState<string>('all');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [noteFileFilter, setNoteFileFilter] = useState<'all' | 'with-file' | 'without-file'>('all');
   const [startDate, setStartDate] = useState<string>('');
@@ -350,7 +359,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
   // Reset page to 1 when filters change
   useEffect(() => {
     setServerPage(1);
-  }, [selectedUnit, selectedOpType, selectedEntityType, slideFilter, debouncedSearchQuery, startDate, endDate, serverPageSize]);
+  }, [selectedUnit, selectedOpType, selectedEntityType, selectedAssignee, selectedStatus, slideFilter, debouncedSearchQuery, startDate, endDate, serverPageSize]);
 
   // Fetch from server when in server mode
   useEffect(() => {
@@ -364,6 +373,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           unit: selectedUnit,
           opType: selectedOpType,
           entityType: selectedEntityType,
+          assignee: selectedAssignee,
           status: selectedStatus,
           search: debouncedSearchQuery,
           startDate: startDate,
@@ -399,6 +409,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     selectedUnit,
     selectedOpType,
     selectedEntityType,
+    selectedAssignee,
     selectedStatus,
     slideFilter,
     debouncedSearchQuery,
@@ -480,6 +491,34 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
     return proc.sort();
   }, [eraItems]);
 
+  // Distinct assignees list (combining DB assignees and items)
+  const allAssignees = useMemo(() => {
+    const set = new Set<string>();
+    (assigneesList || []).forEach(a => { if (a && a.trim()) set.add(a.trim()); });
+    eraItems.forEach(item => {
+      if (item.assignee && item.assignee.trim()) {
+        set.add(item.assignee.trim());
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'fa'));
+  }, [eraItems, assigneesList]);
+
+  // Assignee process counts map
+  const assigneeCountsMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    eraItems.forEach(item => {
+      if (item.assignee && item.assignee.trim()) {
+        const a = item.assignee.trim();
+        map[a] = (map[a] || 0) + 1;
+      }
+    });
+    return map;
+  }, [eraItems]);
+
+  const unassignedCount = useMemo(() => {
+    return eraItems.filter(item => !item.assignee || !item.assignee.trim()).length;
+  }, [eraItems]);
+
   // Distinct years available in dataset
   const allYears = useMemo(() => {
     const years = new Set<string>();
@@ -517,6 +556,17 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       if (selectedEntityType !== 'all' && norm(item.entityType || 'فرآیند') !== norm(selectedEntityType)) {
         return false;
       }
+      if (selectedAssignee !== 'all') {
+        if (selectedAssignee === 'none') {
+          if (item.assignee && item.assignee.trim()) return false;
+        } else {
+          const aNorm = norm(selectedAssignee);
+          const itemAssigneeNorm = norm(item.assignee || '');
+          if (itemAssigneeNorm !== aNorm && !itemAssigneeNorm.includes(aNorm)) {
+            return false;
+          }
+        }
+      }
       if (selectedStatus !== 'all') {
         const itemStatus = item.status || 'انجام شده';
         if (itemStatus !== selectedStatus) {
@@ -542,12 +592,13 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         const mDate = item.executionDate.includes(q);
         const mEntity = norm(item.entityType || '').includes(q);
         const mOp = norm(item.operationType || '').includes(q);
+        const mAssignee = norm(item.assignee || '').includes(q);
         const mStatus = norm(item.status || 'انجام شده').includes(q);
         const mProblem = norm(item.problemDescription || '').includes(q);
         const mSolution = norm(item.solutionDescription || '').includes(q);
         const mAchStr = Array.isArray(item.achievements) ? item.achievements.join(' ') : (item.achievements || '');
         const mAch = norm(mAchStr).includes(q);
-        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mStatus && !mProblem && !mSolution && !mAch) return false;
+        if (!mName && !mUnit && !mDesc && !mDate && !mEntity && !mOp && !mAssignee && !mStatus && !mProblem && !mSolution && !mAch) return false;
       }
       if (bpmnFilter === 'with-bpmn' && !item.hasBpmn && !item.bpmnXml) {
         return false;
@@ -563,7 +614,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       }
       return true;
     });
-  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, selectedStatus, slideFilter, startDate, endDate, searchQuery, bpmnFilter, noteFileFilter]);
+  }, [eraItems, selectedUnit, selectedOpType, selectedEntityType, selectedAssignee, selectedStatus, slideFilter, startDate, endDate, searchQuery, bpmnFilter, noteFileFilter]);
 
   // Note file counts
   const withNoteFileCount = useMemo(() => {
@@ -606,6 +657,7 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       selectedUnit !== 'all',
       selectedOpType !== 'all',
       selectedEntityType !== 'all',
+      selectedAssignee !== 'all',
       selectedStatus !== 'all',
       noteFileFilter !== 'all',
       slideFilter !== 'all',
@@ -613,12 +665,13 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
       searchQuery.trim().length > 0,
       Boolean(startDate || endDate)
     ].filter(Boolean).length;
-  }, [selectedUnit, selectedOpType, selectedEntityType, selectedStatus, noteFileFilter, slideFilter, bpmnFilter, searchQuery, startDate, endDate]);
+  }, [selectedUnit, selectedOpType, selectedEntityType, selectedAssignee, selectedStatus, noteFileFilter, slideFilter, bpmnFilter, searchQuery, startDate, endDate]);
 
   const handleResetAllFilters = () => {
     setSelectedUnit('all');
     setSelectedOpType('all');
     setSelectedEntityType('all');
+    setSelectedAssignee('all');
     setSelectedStatus('all');
     setNoteFileFilter('all');
     setSlideFilter('all');
@@ -662,6 +715,9 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
           break;
         case 'operationType':
           comparison = (a.operationType || '').localeCompare(b.operationType || '', 'fa');
+          break;
+        case 'assignee':
+          comparison = (a.assignee || '').localeCompare(b.assignee || '', 'fa');
           break;
         case 'status':
           comparison = (a.status || 'انجام شده').localeCompare(b.status || 'انجام شده', 'fa');
@@ -2271,6 +2327,19 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                     </div>
                   </th>
                 )}
+                {isColVisible('assignee') && (
+                  <th
+                    onClick={() => handleSort('assignee')}
+                    className="py-2.5 px-2 min-w-[110px] text-center text-xs cursor-pointer hover:bg-[#E2E2DC] transition group"
+                    title="مرتب‌سازی بر اساس اقدام‌کننده مسئول"
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      <UserCheck className="h-3.5 w-3.5 text-[#545D4B]" />
+                      <span>اقدام‌کننده</span>
+                      {renderSortIndicator('assignee')}
+                    </div>
+                  </th>
+                )}
                 {isColVisible('status') && (
                   <th
                     onClick={() => handleSort('status')}
@@ -2707,6 +2776,26 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                   </th>
                 )}
 
+                {/* Assignee Filter */}
+                {isColVisible('assignee') && (
+                  <th className="p-1 font-normal">
+                    <select
+                      value={selectedAssignee}
+                      onChange={e => setSelectedAssignee(e.target.value)}
+                      className="w-full bg-white border border-[#DDDBCF] rounded-lg px-1 py-0.5 text-[10px] text-[#2D2C28] font-medium focus:outline-none focus:ring-1 focus:ring-[#545D4B] cursor-pointer"
+                      title="فیلتر اقدام‌کننده مسئول"
+                    >
+                      <option value="all">همه اقدام‌کنندگان</option>
+                      <option value="none">بدون اقدام‌کننده ({unassignedCount})</option>
+                      {allAssignees.map(a => (
+                        <option key={a} value={a}>
+                          {a} ({assigneeCountsMap[a] || 0})
+                        </option>
+                      ))}
+                    </select>
+                  </th>
+                )}
+
                 {/* 7. Status Filter */}
                 {isColVisible('status') && (
                   <th className="p-1 font-normal">
@@ -2894,6 +2983,27 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
                           }`}>
                             {item.operationType}
                           </span>
+                        </td>
+                      )}
+
+                      {/* Assignee */}
+                      {isColVisible('assignee') && (
+                        <td className="py-2.5 px-2 text-center">
+                          {item.assignee && item.assignee.trim() ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-bold text-[10px] bg-slate-100 text-slate-800 border border-slate-300 shadow-2xs whitespace-nowrap cursor-pointer hover:bg-slate-200 transition"
+                              title={`اقدام‌کننده مسئول: ${item.assignee} (کلیک برای فیلتر)`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedAssignee(item.assignee!.trim());
+                              }}
+                            >
+                              <UserCheck className="w-3 h-3 text-emerald-700 shrink-0" />
+                              <span className="truncate max-w-[120px]">{item.assignee}</span>
+                            </span>
+                          ) : (
+                            <span className="text-[#A3A199] text-[10px] select-none">—</span>
+                          )}
                         </td>
                       )}
 
@@ -3242,6 +3352,8 @@ export const EraDashboard: React.FC<EraDashboardProps> = ({
         initialItem={editingItem}
         existingUnits={allUnits}
         existingProcesses={allProcesses}
+        assigneesList={allAssignees}
+        onOpenSettingsAssignees={onOpenSettingsAssignees}
         maxFileSizeMb={eraVisibility?.maxNoteFileSizeMb ?? 10}
         onOpenBpmnDesigner={(item) => {
           setIsModalOpen(false);

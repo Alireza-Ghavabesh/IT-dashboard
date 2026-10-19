@@ -50,7 +50,10 @@ import {
   Workflow,
   Paperclip,
   FileText,
-  LifeBuoy
+  LifeBuoy,
+  UserCheck,
+  UserPlus,
+  Users
 } from 'lucide-react';
 import {
   CauseRule,
@@ -90,7 +93,7 @@ interface SettingsModalProps {
   allLetters: ProcessedLetter[];
   allUnits: string[];
   totalEraCount?: number;
-  initialTab?: 'exclusions' | 'causes' | 'system' | 'backup';
+  initialTab?: 'exclusions' | 'causes' | 'assignees' | 'system' | 'backup';
   // Floating AI BI Assistant Button Toggle
   showFloatingAiButton?: boolean;
   onToggleFloatingAiButton?: (show: boolean) => void;
@@ -112,6 +115,7 @@ interface SettingsModalProps {
   onResetTabVisibility?: () => void;
   onOpenAiModal?: () => void;
   onDataRestored?: () => Promise<void>;
+  onAssigneesUpdated?: (assignees: string[]) => void;
 }
 
 const PRESET_EXCLUSION_KEYWORDS = [
@@ -171,13 +175,99 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleTabVisibility,
   onResetTabVisibility,
   onOpenAiModal,
-  onDataRestored
+  onDataRestored,
+  onAssigneesUpdated
 }) => {
-  const [activeTab, setActiveTab] = useState<'exclusions' | 'causes' | 'system' | 'backup'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'exclusions' | 'causes' | 'assignees' | 'system' | 'backup'>(initialTab as any);
+
+  // --- Assignees Management State (ذخیره‌سازی مستقیم در دیتابیس بدون لوکال استوریج) ---
+  const [assigneesList, setAssigneesList] = useState<string[]>([]);
+  const [assigneeCounts, setAssigneeCounts] = useState<Record<string, number>>({});
+  const [isLoadingAssignees, setIsLoadingAssignees] = useState<boolean>(false);
+  const [newAssigneeName, setNewAssigneeName] = useState<string>('');
+  const [editingAssigneeIndex, setEditingAssigneeIndex] = useState<number | null>(null);
+  const [editingAssigneeName, setEditingAssigneeName] = useState<string>('');
+  const [assigneeSearchQuery, setAssigneeSearchQuery] = useState<string>('');
+  const [assigneeSaveMessage, setAssigneeSaveMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const loadAssigneesFromDb = async () => {
+    try {
+      setIsLoadingAssignees(true);
+      const res = await api.getAssignees();
+      if (res && res.assignees) {
+        setAssigneesList(res.assignees);
+        setAssigneeCounts(res.counts || {});
+        if (onAssigneesUpdated) onAssigneesUpdated(res.assignees);
+      }
+    } catch (err: any) {
+      console.warn('Failed to load assignees from DB:', err);
+    } finally {
+      setIsLoadingAssignees(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      loadAssigneesFromDb();
+    }
+  }, [isOpen]);
+
+  const handleAddAssignee = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = newAssigneeName.trim();
+    if (!trimmed) return;
+    if (assigneesList.includes(trimmed)) {
+      setAssigneeSaveMessage({ text: 'این نام قبلاً در لیست اقدام‌کنندگان دیتابیس ثبت شده است.', type: 'error' });
+      setTimeout(() => setAssigneeSaveMessage(null), 3000);
+      return;
+    }
+    const updated = [...assigneesList, trimmed];
+    try {
+      await api.saveAssignees(updated);
+      setAssigneesList(updated);
+      setNewAssigneeName('');
+      setAssigneeSaveMessage({ text: `«${trimmed}» با موفقیت در دیتابیس ذخیره شد.`, type: 'success' });
+      setTimeout(() => setAssigneeSaveMessage(null), 3000);
+      if (onAssigneesUpdated) onAssigneesUpdated(updated);
+    } catch (err: any) {
+      setAssigneeSaveMessage({ text: err.message || 'خطا در ذخیره‌سازی در دیتابیس', type: 'error' });
+    }
+  };
+
+  const handleDeleteAssignee = async (nameToDelete: string) => {
+    const updated = assigneesList.filter(a => a !== nameToDelete);
+    try {
+      await api.saveAssignees(updated);
+      setAssigneesList(updated);
+      setAssigneeSaveMessage({ text: `«${nameToDelete}» از لیست دیتابیس حذف گردید.`, type: 'success' });
+      setTimeout(() => setAssigneeSaveMessage(null), 3000);
+      if (onAssigneesUpdated) onAssigneesUpdated(updated);
+    } catch (err: any) {
+      setAssigneeSaveMessage({ text: err.message || 'خطا در حذف از دیتابیس', type: 'error' });
+    }
+  };
+
+  const handleSaveEditAssignee = async (index: number) => {
+    const trimmed = editingAssigneeName.trim();
+    if (!trimmed) return;
+    const updated = [...assigneesList];
+    updated[index] = trimmed;
+    try {
+      await api.saveAssignees(updated);
+      setAssigneesList(updated);
+      setEditingAssigneeIndex(null);
+      setEditingAssigneeName('');
+      setAssigneeSaveMessage({ text: `نام اقدام‌کننده با موفقیت به «${trimmed}» تغییر یافت.`, type: 'success' });
+      setTimeout(() => setAssigneeSaveMessage(null), 3000);
+      if (onAssigneesUpdated) onAssigneesUpdated(updated);
+    } catch (err: any) {
+      setAssigneeSaveMessage({ text: err.message || 'خطا در به‌روزرسانی در دیتابیس', type: 'error' });
+    }
+  };
 
   useEffect(() => {
     if (isOpen && initialTab) {
-      setActiveTab(initialTab);
+      setActiveTab(initialTab as any);
     }
   }, [isOpen, initialTab]);
 
@@ -334,7 +424,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
-  const handleTabClick = (tabKey: 'exclusions' | 'causes' | 'system' | 'backup', e: React.MouseEvent) => {
+  const handleTabClick = (tabKey: 'exclusions' | 'causes' | 'assignees' | 'system' | 'backup', e: React.MouseEvent) => {
     if (hasMovedRef.current) {
       e.preventDefault();
       e.stopPropagation();
@@ -1102,6 +1192,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 activeTab === 'causes' ? 'bg-[#EFF6FF] text-[#1E40AF]' : 'bg-[#DDDBCF] text-[#5A5852]'
               }`}>
                 {formatNumber(causeRules.length)}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={(e) => handleTabClick('assignees', e)}
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all shrink-0 whitespace-nowrap select-none ${
+                isDraggingTabs ? 'cursor-grabbing' : 'cursor-pointer'
+              } ${
+                activeTab === 'assignees'
+                  ? 'bg-white text-emerald-800 shadow-xs border border-[#E2E0D8]'
+                  : 'text-[#5A5852] hover:text-[#2D2C28] hover:bg-[#E8E6DF]'
+              }`}
+            >
+              <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
+              <span className="sm:hidden">اقدام‌کنندگان فرآیند</span>
+              <span className="hidden sm:inline">مدیریت اقدام‌کنندگان فرآیندها</span>
+              <span className={`px-1.5 sm:px-2 py-0.2 rounded-full text-[10px] ${
+                activeTab === 'assignees' ? 'bg-emerald-100 text-emerald-800 font-black' : 'bg-[#DDDBCF] text-[#5A5852]'
+              }`}>
+                {formatNumber(assigneesList.length)}
               </span>
             </button>
 
@@ -2293,6 +2404,236 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ======================================================== */}
+          {/* TAB: ASSIGNEES MANAGEMENT (مدیریت اقدام‌کنندگان در دیتابیس) */}
+          {/* ======================================================== */}
+          {activeTab === 'assignees' && (
+            <div className="space-y-6">
+              {/* Header Card */}
+              <div className="bg-gradient-to-br from-emerald-50/80 via-white to-emerald-50/40 rounded-2xl p-5 border border-emerald-200 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-100 pb-4">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-700 to-emerald-900 text-white shadow-xs shrink-0 mt-0.5">
+                      <UserCheck className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-black text-emerald-950">
+                          مدیریت اقدام‌کنندگان فرآیندهای سازمانی (ERA Assignees)
+                        </h3>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                          ذخیره‌سازی مستقیم در SQLite DB
+                        </span>
+                      </div>
+                      <p className="text-xs text-emerald-900/80 mt-1">
+                        اسامی ثبت‌شده در این بخش، در پایگاه داده ذخیره شده و در لیست کشویی هنگام ثبت، ویرایش فرآیند، فیلترهای جستجو و گزارش‌های سریع در دسترس خواهند بود.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={loadAssigneesFromDb}
+                      disabled={isLoadingAssignees}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-100/60 text-emerald-800 text-xs font-bold border border-emerald-200 transition cursor-pointer shadow-2xs disabled:opacity-50"
+                      title="به‌روزرسانی و دریافت مجدد از پایگاه داده"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${isLoadingAssignees ? 'animate-spin' : ''}`} />
+                      <span>تازه کردن</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Add New Assignee Form */}
+                <form onSubmit={handleAddAssignee} className="space-y-3">
+                  <div className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <UserPlus className="h-4 w-4 text-emerald-600" />
+                    <span>افزودن اقدام‌کننده جدید:</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        type="text"
+                        value={newAssigneeName}
+                        onChange={(e) => setNewAssigneeName(e.target.value)}
+                        placeholder="نام و نام خانوادگی، عنوان سمت یا نام تیم (مثال: مهندس رضایی، واحد تحلیل فرآیندها...)"
+                        className="w-full text-xs bg-white border border-emerald-300 rounded-xl px-3.5 py-2.5 text-[#2D2C28] placeholder-emerald-900/40 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-600 transition"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!newAssigneeName.trim()}
+                      className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>ثبت در پایگاه داده</span>
+                    </button>
+                  </div>
+
+                  {assigneeSaveMessage && (
+                    <div className={`p-2.5 rounded-xl text-xs font-bold flex items-center gap-2 animate-in fade-in ${
+                      assigneeSaveMessage.type === 'success'
+                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-200'
+                        : 'bg-rose-100 text-rose-900 border border-rose-200'
+                    }`}>
+                      {assigneeSaveMessage.type === 'success' ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-700 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-4 w-4 text-rose-700 shrink-0" />
+                      )}
+                      <span>{assigneeSaveMessage.text}</span>
+                    </div>
+                  )}
+                </form>
+              </div>
+
+              {/* Assignees List Section */}
+              <div className="bg-white rounded-2xl p-5 border border-[#DDDBCF] shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E8E6DF] pb-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-[#545D4B]" />
+                    <h4 className="text-xs font-black text-[#2D2C28]">
+                      لیست اقدام‌کنندگان ثبت شده در سامانه ({formatNumber(assigneesList.length)} نفر/تیم)
+                    </h4>
+                  </div>
+
+                  {/* Search within assignees */}
+                  {assigneesList.length > 4 && (
+                    <div className="relative w-full sm:w-64">
+                      <Search className="h-3.5 w-3.5 text-[#8A8880] absolute right-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={assigneeSearchQuery}
+                        onChange={(e) => setAssigneeSearchQuery(e.target.value)}
+                        placeholder="جستجو در بین اقدام‌کنندگان..."
+                        className="w-full text-[11px] bg-[#F5F4EE] border border-[#DDDBCF] rounded-xl pr-8 pl-3 py-1.5 text-[#2D2C28] placeholder-[#8A8880] focus:outline-none focus:ring-1 focus:ring-emerald-600 transition"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* Grid of Assignees */}
+                {(() => {
+                  const q = assigneeSearchQuery.trim().toLowerCase();
+                  const displayedList = assigneesList.filter(name => !q || name.toLowerCase().includes(q));
+
+                  if (displayedList.length === 0) {
+                    return (
+                      <div className="p-8 text-center text-xs text-[#8A8880] space-y-2 border border-dashed border-[#DDDBCF] rounded-xl">
+                        <UserCheck className="h-8 w-8 text-[#DDDBCF] mx-auto" />
+                        <div>
+                          {assigneesList.length === 0
+                            ? 'هنوز اقدام‌کننده‌ای در دیتابیس ثبت نشده است. از کادر بالا اقدام‌کننده جدید را اضافه فرمایید.'
+                            : 'هیچ اقدام‌کننده‌ای با عبارت جستجو شده یافت نشد.'}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {displayedList.map((name) => {
+                        const originalIndex = assigneesList.indexOf(name);
+                        const isEditing = editingAssigneeIndex === originalIndex;
+                        const processCount = assigneeCounts[name] || 0;
+
+                        return (
+                          <div
+                            key={name}
+                            className="bg-[#FAF9F5] hover:bg-white border border-[#E2E0D8] hover:border-emerald-300 rounded-xl p-3.5 flex flex-col justify-between gap-3 shadow-2xs transition group"
+                          >
+                            {isEditing ? (
+                              <div className="space-y-2">
+                                <input
+                                  type="text"
+                                  value={editingAssigneeName}
+                                  onChange={(e) => setEditingAssigneeName(e.target.value)}
+                                  className="w-full text-xs bg-white border border-emerald-500 rounded-lg px-2.5 py-1.5 font-bold text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveEditAssignee(originalIndex);
+                                    if (e.key === 'Escape') setEditingAssigneeIndex(null);
+                                  }}
+                                />
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEditAssignee(originalIndex)}
+                                    className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-[11px] font-bold cursor-pointer"
+                                  >
+                                    ذخیره
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingAssigneeIndex(null)}
+                                    className="px-2.5 py-1 bg-[#E8E6DF] hover:bg-[#DDDBCF] text-[#5A5852] rounded-lg text-[11px] font-bold cursor-pointer"
+                                  >
+                                    انصراف
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center justify-center font-black text-xs shrink-0">
+                                      {name.slice(0, 1)}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <h5 className="text-xs font-bold text-[#2D2C28] truncate" title={name}>
+                                        {name}
+                                      </h5>
+                                      <div className="text-[10px] text-[#8A8880] mt-0.5">
+                                        {processCount > 0 ? (
+                                          <span className="text-emerald-700 font-bold">
+                                            {formatNumber(processCount)} فرآیند منتسب شده
+                                          </span>
+                                        ) : (
+                                          <span>بدون فرآیند انتسابی</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingAssigneeIndex(originalIndex);
+                                        setEditingAssigneeName(name);
+                                      }}
+                                      className="p-1 text-[#5A5852] hover:text-blue-700 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                                      title="ویرایش نام اقدام‌کننده"
+                                    >
+                                      <Edit2 className="h-3.5 w-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (window.confirm(`آیا از حذف اقدام‌کننده «${name}» از لیست دیتابیس اطمینان دارید؟`)) {
+                                          handleDeleteAssignee(name);
+                                        }
+                                      }}
+                                      className="p-1 text-[#5A5852] hover:text-rose-700 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                      title="حذف اقدام‌کننده"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}

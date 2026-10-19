@@ -29,12 +29,16 @@ import {
   FileText,
   Download,
   FileArchive,
-  FileSpreadsheet
+  FileSpreadsheet,
+  UserCheck,
+  User,
+  Users
 } from 'lucide-react';
 import { ProcessedEraItem, RawEraItem, EraNoteFile } from '../types';
 import { JalaliDateInput } from './JalaliDateInput';
 import { RichTextEditor } from './RichTextEditor';
-import { getCurrentJalaliDate } from '../utils/parser';
+import { getCurrentJalaliDate, formatNumber } from '../utils/parser';
+import { api } from '../services/api';
 
 interface EraFormModalProps {
   isOpen: boolean;
@@ -43,6 +47,8 @@ interface EraFormModalProps {
   initialItem?: ProcessedEraItem | null;
   existingUnits?: string[];
   existingProcesses?: string[];
+  assigneesList?: string[];
+  onOpenSettingsAssignees?: () => void;
   maxFileSizeMb?: number;
   onOpenBpmnDesigner?: (item: ProcessedEraItem) => void;
 }
@@ -54,6 +60,8 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   initialItem,
   existingUnits = [],
   existingProcesses = [],
+  assigneesList = [],
+  onOpenSettingsAssignees,
   maxFileSizeMb = 10,
   onOpenBpmnDesigner
 }) => {
@@ -64,6 +72,9 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   const [entityType, setEntityType] = useState<'فرم' | 'فرآیند' | 'گزارش'>('فرآیند');
   const [status, setStatus] = useState<'برای انجام' | 'درحال انجام' | 'انجام شده' | 'رد شده'>('برای انجام');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [assignee, setAssignee] = useState<string>('');
+  const [dbAssignees, setDbAssignees] = useState<string[]>(assigneesList || []);
+  const [isLoadingAssignees, setIsLoadingAssignees] = useState<boolean>(false);
   const [description, setDescription] = useState('');
   const [problemDescription, setProblemDescription] = useState('');
   const [solutionDescription, setSolutionDescription] = useState('');
@@ -91,17 +102,46 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
   const [isUploadingNote, setIsUploadingNote] = useState<boolean>(false);
   const noteFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load assignees directly from SQLite Database whenever modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoadingAssignees(true);
+      api.getAssignees()
+        .then(res => {
+          if (res && Array.isArray(res.assignees)) {
+            setDbAssignees(res.assignees);
+          }
+        })
+        .catch(err => console.warn('Could not load assignees from DB:', err))
+        .finally(() => setIsLoadingAssignees(false));
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (assigneesList && assigneesList.length > 0) {
+      setDbAssignees(assigneesList);
+    }
+  }, [assigneesList]);
+
   useEffect(() => {
     if (initialItem) {
       setProcessName(initialItem.processName);
       setOrgUnit(initialItem.orgUnit);
       setExecutionDate(initialItem.executionDate || getCurrentJalaliDate().str);
+
+      const initAssignee = (
+        initialItem.assignee ||
+        (initialItem as any)["اقدام کننده"] ||
+        (initialItem as any)["اقدام‌کننده"] ||
+        ''
+      ).trim();
+      setAssignee(initAssignee);
       
-      const op = (initialItem.operationType || '').trim();
-      if (op.includes('اتوماتیک') || op.includes('اوتوماتیک') || op.includes('اتوماسیون')) {
-        setOperationType('اتوماتیک‌سازی');
-      } else if (op.includes('جدید')) {
+      const op = (initialItem.operationType || (initialItem as any)["نوع عملیات"] || '').trim();
+      if (op.includes('جدید') || op.includes('ایجاد')) {
         setOperationType('جدید');
+      } else if (op.includes('اتوماتیک') || op.includes('اوتوماتیک') || op.includes('اتوماسیون')) {
+        setOperationType('اتوماتیک‌سازی');
       } else {
         setOperationType('اصلاح');
       }
@@ -275,6 +315,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       setEntityType('فرآیند');
       setStatus('برای انجام');
       setRejectionReason('');
+      setAssignee('');
       setDescription('');
       setProblemDescription('');
       setSolutionDescription('');
@@ -555,6 +596,7 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
       operationType,
       entityType,
       status,
+      assignee: assignee.trim() || undefined,
       rejectionReason: status === 'رد شده' ? rejectionReason.trim() : undefined,
       noteFile: noteFile || null,
       description: description.trim(),
@@ -899,6 +941,138 @@ export const EraFormModal: React.FC<EraFormModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Row 3: Assignee (اقدام‌کننده مسئول فرآیند - انتخاب و ثبت در پایگاه داده SQLite) */}
+            <div className="bg-[#FAF9F5] border border-[#DDDBCF] rounded-2xl p-3.5 sm:p-4 shadow-2xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E8E6DF] pb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-xl bg-[#545D4B] text-white shadow-2xs">
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <label htmlFor="assignee-select-input" className="font-extrabold text-xs text-[#2D2C28] flex items-center gap-2">
+                    <span>اقدام‌کننده مسئول فرآیند:</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      ذخیره در پایگاه داده SQLite
+                    </span>
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  {onOpenSettingsAssignees && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenSettingsAssignees();
+                      }}
+                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-900 hover:underline flex items-center gap-1 cursor-pointer"
+                      title="تنظیم و افزودن اقدام‌کنندگان جدید در تنظیمات سامانه"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>مدیریت اقدام‌کنندگان در تنظیمات</span>
+                    </button>
+                  )}
+                  {assignee && (
+                    <button
+                      type="button"
+                      onClick={() => setAssignee('')}
+                      className="text-[10px] font-bold text-rose-700 hover:text-rose-900 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-200 transition cursor-pointer"
+                      title="حذف انتصاب اقدام‌کننده"
+                    >
+                      حذف انتصاب
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                {/* Select from registered DB assignees */}
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold text-[#75746E] mb-1">
+                    انتخاب از اقدام‌کنندگان ثبت شده در دیتابیس:
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={dbAssignees.includes(assignee) ? assignee : (assignee ? 'custom' : '')}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === 'custom') {
+                          // keep custom
+                        } else if (val === '') {
+                          setAssignee('');
+                        } else {
+                          setAssignee(val);
+                        }
+                      }}
+                      className="w-full text-xs font-bold bg-white border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] transition cursor-pointer"
+                    >
+                      <option value="">-- بدون اقدام‌کننده (تخصیص‌نیافته) --</option>
+                      {dbAssignees.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                      {assignee && !dbAssignees.includes(assignee) && (
+                        <option value="custom">سفارشی: {assignee}</option>
+                      )}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Direct text input with auto-suggestions via datalist */}
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold text-[#75746E] mb-1">
+                    یا تایپ نام / سمت اقدام‌کننده:
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="assignee-select-input"
+                      type="text"
+                      list="era-assignees-db-datalist"
+                      value={assignee}
+                      onChange={(e) => setAssignee(e.target.value)}
+                      placeholder="تایپ یا انتخاب از فهرست اقدام‌کنندگان..."
+                      className="w-full text-xs font-medium bg-white border border-[#DDDBCF] rounded-xl px-3 py-2 text-[#2D2C28] focus:outline-none focus:ring-2 focus:ring-[#545D4B] transition"
+                    />
+                    <datalist id="era-assignees-db-datalist">
+                      {dbAssignees.map((name, idx) => (
+                        <option key={idx} value={name} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick clickable chips for assignees */}
+              {dbAssignees.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px]">
+                  <span className="text-[10px] font-bold text-[#8A8880] shrink-0">دسترسی سریع:</span>
+                  {dbAssignees.slice(0, 6).map((name) => {
+                    const isSelected = assignee === name;
+                    return (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => setAssignee(isSelected ? '' : name)}
+                        className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer flex items-center gap-1 ${
+                          isSelected
+                            ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                            : 'bg-white text-[#4A4843] border-[#DDDBCF] hover:bg-[#EAEAE5] hover:border-[#C4C2B8]'
+                        }`}
+                      >
+                        <User className="w-3 h-3" />
+                        <span>{name}</span>
+                        {isSelected && <Check className="w-3 h-3 text-white" />}
+                      </button>
+                    );
+                  })}
+                  {dbAssignees.length > 6 && (
+                    <span className="text-[10px] text-[#8A8880] font-semibold">
+                      +{formatNumber(dbAssignees.length - 6)} مورد دیگر
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Description & Change Details */}

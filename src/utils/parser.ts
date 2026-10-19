@@ -1007,24 +1007,47 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
     ).toString().trim();
 
     let operationType: 'جدید' | 'اصلاح' | 'اتوماتیک‌سازی' | string = 'اصلاح';
-    if (
-      rawOpType.includes('اتوماتیک') ||
-      rawOpType.includes('اوتوماتیک') ||
-      rawOpType.includes('اتوماسیون') ||
-      rawOpType.toLowerCase().includes('auto') ||
-      description.includes('اتوماتیک سازی') ||
-      description.includes('اتوماتیک‌سازی') ||
-      description.includes('اتوماسیون')
-    ) {
-      operationType = 'اتوماتیک‌سازی';
-    } else if (rawOpType.includes('جدید') || rawOpType.toLowerCase() === 'new' || rawOpType.includes('ایجاد')) {
-      operationType = 'جدید';
-    } else if (rawOpType.includes('اصلاح') || rawOpType.toLowerCase() === 'edit' || rawOpType.toLowerCase() === 'modify') {
-      operationType = 'اصلاح';
-    } else if (rawOpType) {
-      operationType = rawOpType;
-    } else if (description.includes('ایجاد') || description.includes('ساخت')) {
-      operationType = 'جدید';
+    if (rawOpType) {
+      // اگر کاربر یا داده نوع عملیات را مشخص کرده باشد، اولویت قطعی با همان مقدار است
+      if (
+        rawOpType.includes('جدید') ||
+        rawOpType.toLowerCase() === 'new' ||
+        rawOpType.includes('ایجاد')
+      ) {
+        operationType = 'جدید';
+      } else if (
+        rawOpType.includes('اتوماتیک') ||
+        rawOpType.includes('اوتوماتیک') ||
+        rawOpType.includes('اتوماسیون') ||
+        rawOpType.toLowerCase().includes('auto')
+      ) {
+        operationType = 'اتوماتیک‌سازی';
+      } else if (
+        rawOpType.includes('اصلاح') ||
+        rawOpType.toLowerCase() === 'edit' ||
+        rawOpType.toLowerCase() === 'modify'
+      ) {
+        operationType = 'اصلاح';
+      } else {
+        operationType = rawOpType;
+      }
+    } else {
+      // فقط در صورتی که هیچ نوع عملیاتی درج نشده باشد، از هوشمندی متن توضیحات استفاده شود
+      if (
+        description.includes('اتوماتیک سازی') ||
+        description.includes('اتوماتیک‌سازی') ||
+        description.includes('اتوماسیون')
+      ) {
+        operationType = 'اتوماتیک‌سازی';
+      } else if (
+        description.includes('ایجاد') ||
+        description.includes('ساخت') ||
+        processName.includes('ایجاد')
+      ) {
+        operationType = 'جدید';
+      } else {
+        operationType = 'اصلاح';
+      }
     }
 
     // Entity Type (نوع موجودیت: فرم | فرآیند | گزارش)
@@ -1130,6 +1153,18 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       if (cachedRej) rejectionReason = cachedRej;
     }
 
+    // Process Assignee (اقدام‌کننده مسئول فرآیند)
+    let assignee: string | undefined = (
+      item.assignee ||
+      rawAny["assignee"] ||
+      rawAny["اقدام کننده"] ||
+      rawAny["اقدام‌کننده"] ||
+      undefined
+    );
+    if (typeof assignee === 'string') {
+      assignee = assignee.trim() || undefined;
+    }
+
     // Process Note File attachment (pdf, xlsx, rar, zip)
     let noteFile: any = (
       item.noteFile ||
@@ -1148,8 +1183,8 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
     }
 
     // Problem, Solution and Operational Achievements descriptions (custom presentation text)
-    let problemDescription = item.problemDescription || rawAny["مشکل"] || rawAny["چالش"] || undefined;
-    let solutionDescription = item.solutionDescription || rawAny["راهکار"] || rawAny["اقدام"] || undefined;
+    let problemDescription = item.problemDescription || rawAny["مشکل"] || rawAny["چالش"] || rawAny["شرح مشکل"] || rawAny["شرح چالش"] || rawAny["problemDescription"] || undefined;
+    let solutionDescription = item.solutionDescription || rawAny["راهکار"] || rawAny["اقدام"] || rawAny["شرح راهکار"] || rawAny["solutionDescription"] || undefined;
     let achievements = item.achievements || rawAny["دستاوردها"] || rawAny["دستاوردها و نتایج عملیاتی"] || rawAny["دستاورد"] || undefined;
     let showAchievements = item.showAchievements !== undefined ? item.showAchievements : undefined;
     let impactTimeMetric = item.impactTimeMetric || rawAny["صرفه‌جویی زمان"] || rawAny["صرفه جویی زمان"] || undefined;
@@ -1256,6 +1291,7 @@ export function processRawEraItems(rawList: RawEraItem[]): ProcessedEraItem[] {
       monthName: dateParsed.monthName,
       operationType,
       entityType,
+      assignee,
       status,
       rejectionReason,
       noteFile: noteFile || null,

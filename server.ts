@@ -566,6 +566,7 @@ async function startServer() {
         unit,
         opType,
         entityType,
+        assignee: assigneeFilter,
         status: statusFilter,
         search,
         startDate,
@@ -622,6 +623,9 @@ async function startServer() {
           entityType: item.entityType || raw.entityType || raw["نوع موجودیت"] || 'فرآیند',
           "وضعیت": raw.status || raw["وضعیت"] || 'انجام شده',
           status: raw.status || raw["وضعیت"] || 'انجام شده',
+          assignee: item.assignee || raw.assignee || raw["اقدام کننده"] || raw["اقدام‌کننده"] || undefined,
+          "اقدام کننده": item.assignee || raw.assignee || raw["اقدام کننده"] || raw["اقدام‌کننده"] || undefined,
+          "اقدام‌کننده": item.assignee || raw.assignee || raw["اقدام کننده"] || raw["اقدام‌کننده"] || undefined,
           rejectionReason: raw.rejectionReason || raw["دلیل رد"] || undefined,
           "دلیل رد": raw.rejectionReason || raw["دلیل رد"] || undefined,
           noteFile: raw.noteFile || raw["فایل یادداشت"] || undefined,
@@ -689,6 +693,20 @@ async function startServer() {
           }
         }
 
+        if (assigneeFilter && assigneeFilter !== 'all') {
+          if (assigneeFilter === 'none' || assigneeFilter === 'unassigned') {
+            if (item.assignee && item.assignee.trim()) {
+              return false;
+            }
+          } else {
+            const aQuery = normText(String(assigneeFilter));
+            const itemAssignee = normText(item.assignee);
+            if (itemAssignee !== aQuery && !itemAssignee.includes(aQuery)) {
+              return false;
+            }
+          }
+        }
+
         if (statusFilter && statusFilter !== 'all') {
           const sQuery = normText(String(statusFilter));
           const itemStatus = normText(item.status || 'انجام شده');
@@ -719,6 +737,7 @@ async function startServer() {
           const mName = (item.processName || '').toLowerCase().includes(q);
           const mUnit = (item.orgUnit || '').toLowerCase().includes(q);
           const mDesc = (item.description || '').toLowerCase().includes(q);
+          const mAssignee = (item.assignee || '').toLowerCase().includes(q);
           const mDate = (item.executionDate || '').includes(q);
           const mEntity = (item.entityType || '').toLowerCase().includes(q);
           const mOp = (item.operationType || '').toLowerCase().includes(q);
@@ -857,8 +876,9 @@ async function startServer() {
         const processName = parsed.processName || 'فرآیند سازمانی';
         const orgUnit = parsed.orgUnit || 'نامشخص';
         const executionDate = parsed.executionDate || '1405/01/01';
-        const operationType = parsed.operationType || 'اصلاح';
-        const entityType = parsed.entityType || 'فرآیند';
+        const operationType = (rawItem.operationType || rawItem["نوع عملیات"] || parsed.operationType || 'اصلاح').toString().trim();
+        const entityType = (rawItem.entityType || rawItem["نوع موجودیت"] || parsed.entityType || 'فرآیند').toString().trim();
+        const assignee = (parsed.assignee || rawItem.assignee || rawItem["اقدام کننده"] || rawItem["اقدام‌کننده"] || '').trim() || null;
         const description = parsed.description || '';
 
         const created = await prisma.eraProcess.create({
@@ -868,8 +888,9 @@ async function startServer() {
             executionDate,
             operationType,
             entityType,
+            assignee,
             description,
-            rawJson: JSON.stringify({ ...rawItem, ...parsed })
+            rawJson: JSON.stringify({ ...rawItem, ...parsed, operationType, "نوع عملیات": operationType, entityType, "نوع موجودیت": entityType, assignee: assignee || undefined })
           }
         });
 
@@ -932,14 +953,25 @@ async function startServer() {
           } catch {}
         }
 
+        const opTypeVal = (body.operationType || body["نوع عملیات"] || parsed.operationType || target.operationType || 'اصلاح').toString().trim();
+        const entityTypeVal = (body.entityType || body["نوع موجودیت"] || parsed.entityType || target.entityType || 'فرآیند').toString().trim();
+
         const mergedRaw = {
           ...existingRaw,
           ...body,
           ...parsed,
+          operationType: opTypeVal,
+          "نوع عملیات": opTypeVal,
+          entityType: entityTypeVal,
+          "نوع موجودیت": entityTypeVal,
           isSelectedForSlide: body.isSelectedForSlide !== undefined 
             ? Boolean(body.isSelectedForSlide) 
             : (existingRaw.isSelectedForSlide !== undefined ? Boolean(existingRaw.isSelectedForSlide) : false)
         };
+
+        const assigneeVal = parsed.assignee !== undefined
+          ? ((parsed.assignee || '').trim() || null)
+          : (target.assignee || null);
 
         updated = await prisma.eraProcess.update({
           where: { id: target.id },
@@ -947,17 +979,26 @@ async function startServer() {
             processName: parsed.processName || target.processName,
             orgUnit: parsed.orgUnit || target.orgUnit,
             executionDate: parsed.executionDate || target.executionDate,
-            operationType: parsed.operationType || target.operationType,
-            entityType: parsed.entityType || target.entityType || 'فرآیند',
+            operationType: opTypeVal,
+            entityType: entityTypeVal,
+            assignee: assigneeVal,
             description: parsed.description !== undefined ? parsed.description : target.description,
-            rawJson: JSON.stringify(mergedRaw)
+            rawJson: JSON.stringify({ ...mergedRaw, operationType: opTypeVal, "نوع عملیات": opTypeVal, entityType: entityTypeVal, "نوع موجودیت": entityTypeVal, assignee: assigneeVal || undefined })
           }
         });
       } else {
         // Create if does not exist (upsert)
+        const opTypeVal = (body.operationType || body["نوع عملیات"] || parsed.operationType || 'اصلاح').toString().trim();
+        const entityTypeVal = (body.entityType || body["نوع موجودیت"] || parsed.entityType || 'فرآیند').toString().trim();
+        const assigneeVal = (parsed.assignee || body.assignee || '').trim() || null;
         const newRaw = {
           ...body,
           ...parsed,
+          operationType: opTypeVal,
+          "نوع عملیات": opTypeVal,
+          entityType: entityTypeVal,
+          "نوع موجودیت": entityTypeVal,
+          assignee: assigneeVal || undefined,
           isSelectedForSlide: body.isSelectedForSlide !== undefined ? Boolean(body.isSelectedForSlide) : false
         };
 
@@ -967,8 +1008,9 @@ async function startServer() {
             processName: parsed.processName || 'فرآیند جدید',
             orgUnit: parsed.orgUnit || 'نامشخص',
             executionDate: parsed.executionDate || '1405/01/01',
-            operationType: parsed.operationType || 'اصلاح',
-            entityType: parsed.entityType || 'فرآیند',
+            operationType: opTypeVal,
+            entityType: entityTypeVal,
+            assignee: assigneeVal,
             description: parsed.description || '',
             rawJson: JSON.stringify(newRaw)
           }
@@ -1739,6 +1781,90 @@ async function startServer() {
       res.json({ success: true, key: updated.key, value });
     } catch (error: any) {
       console.error('Error saving setting:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // ----------------------------------------------------
+  // REST API: Assignees Management (مدیریت اقدام‌کنندگان فرآیندها در دیتابیس)
+  // ----------------------------------------------------
+  app.get('/api/settings/assignees', async (_req: Request, res: Response) => {
+    try {
+      const setting = await prisma.appSetting.findUnique({
+        where: { key: 'era_assignees' }
+      });
+
+      let list: string[] = [];
+      if (setting && setting.value) {
+        try {
+          const parsed = JSON.parse(setting.value);
+          if (Array.isArray(parsed)) {
+            list = parsed.filter(x => typeof x === 'string' && x.trim().length > 0);
+          }
+        } catch {}
+      }
+
+      // If empty in DB, provide default list and save to DB
+      if (list.length === 0) {
+        list = ['تیم فناوری اطلاعات', 'واحد تحلیل فرآیندها', 'مهندس پشتیبانی سامانه'];
+        await prisma.appSetting.upsert({
+          where: { key: 'era_assignees' },
+          create: { key: 'era_assignees', value: JSON.stringify(list) },
+          update: { value: JSON.stringify(list) }
+        }).catch(() => {});
+      }
+
+      // Count processes for each assignee directly from SQLite database
+      const counts: Record<string, number> = {};
+      const allProcesses = await prisma.eraProcess.findMany({
+        select: { assignee: true }
+      });
+      allProcesses.forEach((p: any) => {
+        if (p.assignee && p.assignee.trim()) {
+          const a = p.assignee.trim();
+          counts[a] = (counts[a] || 0) + 1;
+        }
+      });
+
+      res.json({
+        success: true,
+        assignees: list,
+        counts,
+        totalAssigned: allProcesses.filter((p: any) => Boolean(p.assignee)).length
+      });
+    } catch (error: any) {
+      console.error('Error fetching assignees from DB:', error);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  app.post('/api/settings/assignees', async (req: Request, res: Response) => {
+    try {
+      const { assignees } = req.body;
+      if (!Array.isArray(assignees)) {
+        return res.status(400).json({ success: false, error: 'Assignees must be an array of strings' });
+      }
+
+      // Clean and deduplicate names
+      const cleaned = Array.from(new Set(
+        assignees
+          .filter(a => typeof a === 'string')
+          .map(a => a.trim())
+          .filter(a => a.length > 0)
+      ));
+
+      await prisma.appSetting.upsert({
+        where: { key: 'era_assignees' },
+        create: { key: 'era_assignees', value: JSON.stringify(cleaned) },
+        update: { value: JSON.stringify(cleaned) }
+      });
+
+      res.json({
+        success: true,
+        assignees: cleaned
+      });
+    } catch (error: any) {
+      console.error('Error saving assignees to DB:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });

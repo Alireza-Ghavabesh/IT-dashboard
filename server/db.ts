@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS "EraProcess" (
     "executionDate" TEXT NOT NULL,
     "operationType" TEXT NOT NULL DEFAULT 'اصلاح',
     "entityType" TEXT DEFAULT 'فرآیند',
+    "assignee" TEXT,
     "description" TEXT NOT NULL,
     "rawJson" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -153,6 +154,7 @@ CREATE INDEX IF NOT EXISTS "Letter_dateStr_idx" ON "Letter"("dateStr");
 CREATE INDEX IF NOT EXISTS "EraProcess_orgUnit_idx" ON "EraProcess"("orgUnit");
 CREATE INDEX IF NOT EXISTS "EraProcess_operationType_idx" ON "EraProcess"("operationType");
 CREATE INDEX IF NOT EXISTS "EraProcess_entityType_idx" ON "EraProcess"("entityType");
+CREATE INDEX IF NOT EXISTS "EraProcess_assignee_idx" ON "EraProcess"("assignee");
 CREATE INDEX IF NOT EXISTS "ProcessImage_processId_idx" ON "ProcessImage"("processId");
 CREATE INDEX IF NOT EXISTS "ProcessImage_processName_idx" ON "ProcessImage"("processName");
 CREATE INDEX IF NOT EXISTS "CauseRule_cause_idx" ON "CauseRule"("cause");
@@ -195,6 +197,10 @@ export async function ensureDatabaseHealthy(): Promise<void> {
     // Proactively ensure entityType column exists in EraProcess
     await prisma.$executeRawUnsafe(`ALTER TABLE "EraProcess" ADD COLUMN "entityType" TEXT DEFAULT 'فرآیند';`).catch(() => {});
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EraProcess_entityType_idx" ON "EraProcess"("entityType");`).catch(() => {});
+
+    // Proactively ensure assignee column exists in EraProcess
+    await prisma.$executeRawUnsafe(`ALTER TABLE "EraProcess" ADD COLUMN "assignee" TEXT;`).catch(() => {});
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "EraProcess_assignee_idx" ON "EraProcess"("assignee");`).catch(() => {});
 
     // Proactively ensure targetField and other newer columns exist in CauseRule
     await prisma.$executeRawUnsafe(`ALTER TABLE "CauseRule" ADD COLUMN "targetField" TEXT DEFAULT 'all';`).catch(() => {});
